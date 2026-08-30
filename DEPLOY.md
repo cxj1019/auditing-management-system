@@ -22,7 +22,7 @@ Vercel 仅承载**前端**静态站点。后端(Spring Boot,含 Playwright 依�
 
 | 变量 | 值 | 说明 |
 |---|---|---|
-| `VITE_API_BASE_URL` | `https://<你的后端域名>/api` | 后端地址;不设置则走同域 `/api` |
+| `VITE_API_BASE_URL` | `https://<服务名>.onrender.com/api` | Render 后端地址 + `/api`;注意以 `/api` 结尾 |
 
 4. Deploy。`vercel.json` 已配置 SPA 路由回退(刷新不 404),并放行 `/api/` 前缀不回退。
 
@@ -30,7 +30,8 @@ Vercel 仅承载**前端**静态站点。后端(Spring Boot,含 Playwright 依�
 
 1. Railway → New Project → Deploy from GitHub → 选择本仓库
 2. **Root Directory**: `backend`
-3. 构建命令:`mvn -q -DskipTests package`;启动命令:`java -jar target/accounting-firm-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod`
+3. 构建命令:`mvn -q -DskipTests package`;启动命令:`java -Dserver.port=$PORT -jar target/accounting-firm-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod`(服务端口已支持 `PORT` 环境变量,通常无需额外配置)
+4. 部署完成后记下服务地址,形如 `https://<服务名>.onrender.com`
 4. 环境变量:
 
 | 变量 | 说明 |
