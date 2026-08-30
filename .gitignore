@@ -24,3 +24,6 @@ backend/uploads/
 # ===== 系统文件 =====
 .DS_Store
 Thumbs.db
+
+# 部署密钥备忘(勿提交)
+deploy-env.txt

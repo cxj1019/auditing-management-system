@@ -29,9 +29,11 @@ Vercel 仅承载**前端**静态站点。后端(Spring Boot,含 Playwright 依�
 ## 二、后端部署(Railway 为例)
 
 1. Railway → New Project → Deploy from GitHub → 选择本仓库
-2. **Root Directory**: `backend`
-3. 构建命令:`mvn -q -DskipTests package`;启动命令:`java -Dserver.port=$PORT -jar target/accounting-firm-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod`(服务端口已支持 `PORT` 环境变量,通常无需额外配置)
+2. **Runtime 选择 `Docker`**(推荐,已提供 backend/Dockerfile;直接用 Maven 原生环境会报 `mvn: command not found`)
+3. **Root Directory**: `backend`
 4. 部署完成后记下服务地址,形如 `https://<服务名>.onrender.com`
+
+> 注:Dockerfile 未包含 Playwright 的 Chromium,函证"物流截图"功能在线上不可用,其余功能不受影响。
 4. 环境变量:
 
 | 变量 | 说明 |
