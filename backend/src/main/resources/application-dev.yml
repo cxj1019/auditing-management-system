@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    # 本地开发默认连本地 PostgreSQL；使用 Supabase 时配置：
+    # DB_HOST=aws-0-<region>.pooler.supabase.com（Session Pooler，IPv4 可直连）
+    # DB_USER=postgres.<项目引用ID>
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:postgres}?sslmode=${DB_SSLMODE:disable}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+logging:
+  level:
+    com.accounting.firm: debug

@@ -1,0 +1,26 @@
+# ===== 依赖与构建产物 =====
+node_modules/
+frontend/dist/
+backend/target/
+*.class
+
+# ===== 日志与临时文件 =====
+*.log
+backend/app.log
+backend/uploads/
+!backend/uploads/.gitkeep
+
+# ===== IDE / 工具 =====
+.idea/
+.vscode/
+*.iml
+.opencode/
+
+# ===== 环境变量(密钥只放本地/平台环境变量,不进仓库) =====
+.env
+.env.local
+*.env
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db

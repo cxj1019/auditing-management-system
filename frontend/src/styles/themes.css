@@ -1,0 +1,105 @@
+/**
+ * 主题定义：通过 html[data-theme] 覆盖 Element Plus 与应用级 CSS 变量。
+ * 新增主题：在下方追加一个 html[data-theme='xxx'] 块，并在
+ * src/styles/theme.ts 的 THEMES 目录中登记（名称/色板）。
+ */
+:root {
+  --app-sidebar-bg: #1f2937;
+  --app-sidebar-text: #9ca3af;
+  --app-sidebar-active-bg: #2563eb;
+  --app-sidebar-border: rgba(255, 255, 255, 0.08);
+  --app-sidebar-hover-bg: rgba(255, 255, 255, 0.06);
+  --app-header-bg: #ffffff;
+  --app-header-border: #e5e7eb;
+  --app-page-bg: #f3f4f6;
+}
+
+/* 靛青商务 */
+html[data-theme='indigo'] {
+  --el-color-primary: #4f46e5;
+  --el-color-primary-light-3: #847eed;
+  --el-color-primary-light-5: #a7a2f2;
+  --el-color-primary-light-7: #cac8f7;
+  --el-color-primary-light-8: #dcdafa;
+  --el-color-primary-light-9: #edecfc;
+  --el-color-primary-dark-2: #3f38b7;
+  --app-sidebar-bg: #1e1b4b;
+  --app-sidebar-active-bg: #4f46e5;
+  --app-page-bg: #f5f6ff;
+  --app-header-bg: #ffffff;
+}
+
+/* 墨绿典雅 */
+html[data-theme='emerald'] {
+  --el-color-primary: #0d9488;
+  --el-color-primary-light-3: #56b4ac;
+  --el-color-primary-light-5: #86cac4;
+  --el-color-primary-light-7: #b6dfdb;
+  --el-color-primary-light-8: #cfeae7;
+  --el-color-primary-light-9: #e7f4f3;
+  --el-color-primary-dark-2: #0a766d;
+  --app-sidebar-bg: #06342b;
+  --app-sidebar-active-bg: #0d9488;
+  --app-page-bg: #f2f7f5;
+  --app-header-bg: #ffffff;
+}
+
+/* 暖阳橙 */
+html[data-theme='sunset'] {
+  --el-color-primary: #ea580c;
+  --el-color-primary-light-3: #f08a55;
+  --el-color-primary-light-5: #f4ac86;
+  --el-color-primary-light-7: #f9cdb6;
+  --el-color-primary-light-8: #fbdece;
+  --el-color-primary-light-9: #fdeee7;
+  --el-color-primary-dark-2: #bb460a;
+  --app-sidebar-bg: #4a2312;
+  --app-sidebar-active-bg: #ea580c;
+  --app-page-bg: #faf6f2;
+  --app-header-bg: #fffdfa;
+}
+
+/* 绛红雅致 */
+html[data-theme='rose'] {
+  --el-color-primary: #be123c;
+  --el-color-primary-light-3: #d25977;
+  --el-color-primary-light-5: #de889e;
+  --el-color-primary-light-7: #ecb8c4;
+  --el-color-primary-light-8: #f2d0d8;
+  --el-color-primary-light-9: #f8e7ec;
+  --el-color-primary-dark-2: #980e30;
+  --app-sidebar-bg: #3f0d1c;
+  --app-sidebar-active-bg: #be123c;
+  --app-page-bg: #faf3f5;
+  --app-header-bg: #ffffff;
+}
+
+/* 暗夜模式 */
+html[data-theme='dark'] {
+  --el-bg-color: #111827;
+  --el-bg-color-page: #0b1220;
+  --el-bg-color-overlay: #1a2233;
+  --el-text-color-primary: #e5e7eb;
+  --el-text-color-regular: #cbd5e1;
+  --el-text-color-secondary: #94a3b8;
+  --el-text-color-placeholder: #64748b;
+  --el-border-color: #334155;
+  --el-border-color-light: #293548;
+  --el-border-color-lighter: #1f2937;
+  --el-fill-color-light: #1a2233;
+  --el-fill-color-blank: #111827;
+  --el-color-primary: #3b82f6;
+  --el-color-primary-light-3: #2d60b6;
+  --el-color-primary-light-5: #234a8b;
+  --el-color-primary-light-7: #193460;
+  --el-color-primary-light-8: #15284b;
+  --el-color-primary-light-9: #101d35;
+  --el-color-primary-dark-2: #2f68c5;
+  --app-sidebar-bg: #0f172a;
+  --app-sidebar-active-bg: #2563eb;
+  --app-page-bg: #0b1220;
+  --app-header-bg: #111827;
+  --app-sidebar-text: #94a3b8;
+  --app-sidebar-border: rgba(255, 255, 255, 0.06);
+  --app-header-border: #1f2937;
+}

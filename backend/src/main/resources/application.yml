@@ -1,0 +1,52 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  profiles:
+    active: dev
+  flyway:
+    out-of-order: true
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+  servlet:
+    multipart:
+      # 附件上传上限：单文件 20MB，单请求 25MB
+      max-file-size: 20MB
+      max-request-size: 25MB
+
+supabase:
+  # Supabase 项目地址与 service_role 密钥（仅服务端使用，禁止泄露到前端）
+  url: ${SUPABASE_URL:https://lzdhsdlnrkwapspaogwm.supabase.co}
+  service-key: ${SUPABASE_SERVICE_KEY:}
+  # 附件存储桶（私有）
+  bucket: ${SUPABASE_BUCKET:contract-attachments}
+
+reimbursement:
+  # 二级审批阈值（元）：一级批准时超过该金额转终审
+  second-approval-threshold: ${REIMBURSEMENT_THRESHOLD:5000}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+jwt:
+  # 令牌过期时间（毫秒），默认 2 小时
+  expire-time: 7200000
+  # 密钥通过环境变量注入，禁止硬编码
+  secret: ${JWT_SECRET:Y2hhbmdlLXRoaXMtc2VjcmV0LWtleS1pbi1wcm9kdWN0aW9u}
+
+# 审计日志：info 级别输出到日志，预留数据库写入扩展点
+logging:
+  level:
+    com.accounting.firm: info
+    com.accounting.firm.common.aop: info

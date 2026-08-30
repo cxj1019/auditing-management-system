@@ -1,0 +1,39 @@
+/* 全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  text-decoration: none;
+}
+
+/* 页面容器通用样式 */
+.page-container {
+  padding: 16px;
+}
+
+/* 工具栏（表格上方的搜索与操作按钮区） */
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+/* 分页容器 */
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
