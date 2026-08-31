@@ -12,7 +12,8 @@ export const UNAUTHORIZED_CODE = 401
 /** Axios 实例：统一注入 Token、统一解包响应、统一错误提示 */
 const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: 15000,
+  // Render 等平台免费实例冷启动约 1 分钟,超时放宽到 60s
+  timeout: 60000,
 })
 
 /** 请求拦截器：注入 Bearer Token */
@@ -50,9 +51,16 @@ request.interceptors.response.use(
       handleUnauthorized()
       return Promise.reject(error)
     }
-    const message =
-      error.response?.data?.message || error.message || '网络异常，请稍后重试'
+    let message = error.response?.data?.message || ''
+    if (error.code === 'ECONNABORTED' || /timeout/i.test(error.message || '')) {
+      message = '请求超时：后端可能正在冷启动（免费实例约需 1 分钟），请稍候几秒后重试一次'
+    } else if (!error.response) {
+      message = `无法连接后端（${error.message}）。请检查后端是否已启动、接口地址是否配置正确`
+    } else if (!message) {
+      message = `请求失败（HTTP ${error.response.status}）`
+    }
     ElMessage.error(message)
+    console.error('[API]', error.config?.method?.toUpperCase(), error.config?.url, '→', message)
     return Promise.reject(error)
   },
 )
