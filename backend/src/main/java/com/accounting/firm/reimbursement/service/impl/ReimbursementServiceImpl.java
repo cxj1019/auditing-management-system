@@ -91,6 +91,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         requireValidProject(request.getProjectId());
         Reimbursement bill = new Reimbursement();
         bill.setReimbursementNo(generateNo());
+        bill.setApplicantId(currentUser.getUserId());
         bill.setApplicantUsername(currentUser.getUsername());
         bill.setApplicantName(currentUser.getNickname());
         bill.setTitle(request.getTitle());
@@ -131,7 +132,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         if (bill == null) {
             throw new BusinessException("报销单不存在");
         }
-        if (!currentUser.getUsername().equals(bill.getApplicantUsername())) {
+        if (!isApplicant(bill, currentUser)) {
             throw new BusinessException("仅申请人可以提交报销单");
         }
         Long itemCount = itemMapper.selectCount(new LambdaQueryWrapper<ReimbursementItem>()
@@ -140,7 +141,16 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
             throw new BusinessException("至少需要一条费用明细才能提交");
         }
         recalculateTotal(id);
-        ReimbursementStatus.of(bill.getStatus()).submit();
+        ReimbursementStatus current = ReimbursementStatus.of(bill.getStatus());
+        current.submit();
+        // 已驳回单重新提交时清空上一轮审批痕迹，避免待审批单据残留旧驳回意见
+        if (current == ReimbursementStatus.REJECTED) {
+            bill.setPrimaryApproverName(null);
+            bill.setApproverUsername(null);
+            bill.setApproverName(null);
+            bill.setApproveTime(null);
+            bill.setApproveComment(null);
+        }
         bill.setStatus(ReimbursementStatus.PENDING.getCode());
         updateById(bill);
     }
@@ -151,7 +161,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         if (bill == null) {
             throw new BusinessException("报销单不存在");
         }
-        if (!currentUser.getUsername().equals(bill.getApplicantUsername())) {
+        if (!isApplicant(bill, currentUser)) {
             throw new BusinessException("仅申请人可以撤回报销单");
         }
         ReimbursementStatus.of(bill.getStatus()).withdraw();
@@ -165,15 +175,20 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         if (bill == null) {
             throw new BusinessException("报销单不存在");
         }
-        if (bill.getStatus() != ReimbursementStatus.DRAFT.getCode()) {
-            throw new BusinessException("仅草稿状态的报销单可删除");
+        if (bill.getStatus() != ReimbursementStatus.DRAFT.getCode()
+                && bill.getStatus() != ReimbursementStatus.REJECTED.getCode()) {
+            throw new BusinessException("仅草稿或已驳回状态的报销单可删除");
         }
-        if (!currentUser.getUsername().equals(bill.getApplicantUsername())) {
+        if (!isApplicant(bill, currentUser)) {
             throw new BusinessException("仅申请人可以删除草稿");
         }
+        List<Long> itemIds = itemMapper.selectList(new LambdaQueryWrapper<ReimbursementItem>()
+                        .eq(ReimbursementItem::getReimbursementId, id))
+                .stream().map(ReimbursementItem::getId).toList();
         removeById(id);
         itemMapper.delete(new LambdaQueryWrapper<ReimbursementItem>()
                 .eq(ReimbursementItem::getReimbursementId, id));
+        cleanupAttachmentsOfItems(itemIds);
     }
 
     @Override
@@ -182,7 +197,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         if (bill == null) {
             throw new BusinessException("报销单不存在");
         }
-        if (currentUser.getUsername().equals(bill.getApplicantUsername())) {
+        if (isApplicant(bill, currentUser)) {
             throw new BusinessException("不能审批自己提交的报销单");
         }
         ReimbursementStatus current = ReimbursementStatus.of(bill.getStatus());
@@ -246,19 +261,32 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         return baseMapper.selectExportItems(startDate, endDate);
     }
 
-    /** 校验单据可编辑：存在 + 草稿 + 本人 */
+    /** 校验单据可编辑：存在 + 草稿/已驳回 + 本人 */
     private Reimbursement requireEditable(Long id, SecurityUser currentUser) {
         Reimbursement bill = getById(id);
         if (bill == null) {
             throw new BusinessException("报销单不存在");
         }
-        if (bill.getStatus() != ReimbursementStatus.DRAFT.getCode()) {
-            throw new BusinessException("仅草稿状态的报销单可编辑或删除");
+        if (bill.getStatus() != ReimbursementStatus.DRAFT.getCode()
+                && bill.getStatus() != ReimbursementStatus.REJECTED.getCode()) {
+            throw new BusinessException("仅草稿或已驳回状态的报销单可编辑");
         }
-        if (!currentUser.getUsername().equals(bill.getApplicantUsername())) {
+        if (!isApplicant(bill, currentUser)) {
             throw new BusinessException("仅申请人可以编辑草稿报销单");
         }
         return bill;
+    }
+
+    /**
+     * 归属判断：优先按用户 ID 匹配（用户名随邮箱编辑可能变化，快照会失效），
+     * 历史数据 applicant_id 为空时回退按用户名忽略大小写比较
+     */
+    private boolean isApplicant(Reimbursement bill, SecurityUser currentUser) {
+        if (bill.getApplicantId() != null) {
+            return bill.getApplicantId().equals(currentUser.getUserId());
+        }
+        return bill.getApplicantUsername() != null
+                && bill.getApplicantUsername().equalsIgnoreCase(currentUser.getUsername());
     }
 
     /** 校验关联项目存在且未归档（可空） */

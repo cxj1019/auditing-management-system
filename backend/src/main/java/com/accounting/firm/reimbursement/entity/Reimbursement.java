@@ -27,6 +27,9 @@ public class Reimbursement implements Serializable {
     /** 报销编号：BX + yyyyMMdd + 4 位流水，全局唯一 */
     private String reimbursementNo;
 
+    /** 申请人用户 ID（归属判断以此为准，用户名仅作展示与兜底） */
+    private Long applicantId;
+
     /** 申请人账号 */
     private String applicantUsername;
 

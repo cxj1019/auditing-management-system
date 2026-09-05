@@ -84,8 +84,17 @@ function handleReset(): void {
 }
 
 function isOwner(row: ReimbursementItem): boolean {
-  return row.applicantUsername === userStore.username
+  // 优先按用户 ID 判断（用户名随邮箱编辑可能变化）；历史数据回退按账号忽略大小写比较
+  if (row.applicantId != null) {
+    return row.applicantId === userStore.userId
+  }
+  return (row.applicantUsername || '').toLowerCase() === (userStore.username || '').toLowerCase()
 }
+
+/** 详情抽屉里可维护（上传/删除附件）：草稿或已驳回 且 申请人本人 */
+const canMaintainDetail = computed(
+  () => !!detail.value && (detail.value.status === 0 || detail.value.status === 3) && isOwner(detail.value)
+)
 
 // ---------- 新建/编辑（基本信息 + 明细行编辑器） ----------
 const dialogVisible = ref(false)
@@ -247,7 +256,7 @@ async function handleWithdraw(row: ReimbursementItem): Promise<void> {
 
 async function handleDelete(row: ReimbursementItem): Promise<void> {
   try {
-    await ElMessageBox.confirm(`确定删除草稿「${row.reimbursementNo}」吗？`, '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(`确定删除报销单「${row.reimbursementNo}」吗？`, '删除确认', { type: 'warning' })
     await deleteReimbursement(row.id)
     ElMessage.success('删除成功')
     fetchList()
@@ -497,6 +506,11 @@ function makeDetailRowUploader(itemId: number) {
               <el-button v-permission="'business:reimbursement:edit'" link type="success" size="small" @click="handleSubmit(row)">提交</el-button>
               <el-button v-permission="'business:reimbursement:delete'" link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
             </template>
+            <template v-if="row.status === 3 && isOwner(row)">
+              <el-button v-permission="'business:reimbursement:edit'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button v-permission="'business:reimbursement:edit'" link type="success" size="small" @click="handleSubmit(row)">重新提交</el-button>
+              <el-button v-permission="'business:reimbursement:delete'" link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            </template>
             <template v-if="row.status === 1">
               <el-button v-if="isOwner(row)" v-permission="'business:reimbursement:edit'" link type="warning" size="small" @click="handleWithdraw(row)">撤回</el-button>
               <el-button v-permission="'business:reimbursement:approve'" link type="success" size="small" @click="openApprove(row, 'approve')">批准</el-button>
@@ -711,7 +725,7 @@ function makeDetailRowUploader(itemId: number) {
                 </div>
                 <span v-else style="color: #9ca3af; display: inline-block; margin-bottom: 4px">暂无</span>
                 <el-upload
-                  v-if="detail && detail.status === 0 && isOwner(detail)"
+                  v-if="canMaintainDetail"
                   v-permission="'business:reimbursement:edit'"
                   :show-file-list="false"
                   :http-request="makeDetailRowUploader(row.id)"
@@ -754,7 +768,7 @@ function makeDetailRowUploader(itemId: number) {
               <template #default="{ row }">
                 <el-button link type="primary" size="small" @click="handleDownloadAtt(row)">下载</el-button>
                 <el-button
-                  v-if="detail && detail.status === 0 && isOwner(detail)"
+                  v-if="canMaintainDetail"
                   v-permission="'business:reimbursement:edit'"
                   link
                   type="danger"

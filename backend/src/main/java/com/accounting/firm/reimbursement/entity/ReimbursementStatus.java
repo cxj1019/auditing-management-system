@@ -4,8 +4,9 @@ import com.accounting.firm.common.exception.BusinessException;
 
 /**
  * 报销单状态枚举与状态机
- * <p>合法流转：草稿 → 待审批（提交）；待审批 → 草稿（撤回）；
- * 待审批 → 已批准/已驳回/待终审（一级审批）；待终审 → 已批准/已驳回（终审）；终态锁定</p>
+     * <p>合法流转：草稿 → 待审批（提交）；待审批 → 草稿（撤回）；
+     * 待审批 → 已批准/已驳回/待终审（一级审批）；待终审 → 已批准/已驳回（终审）；
+     * 已驳回 → 待审批（申请人修改后重新提交）；已批准为终态锁定</p>
  */
 public enum ReimbursementStatus {
 
@@ -45,10 +46,10 @@ public enum ReimbursementStatus {
         return this == APPROVED || this == REJECTED;
     }
 
-    /** 提交：草稿 → 待审批 */
+    /** 提交：草稿 → 待审批；已驳回 → 待审批（重新提交） */
     public ReimbursementStatus submit() {
-        if (this != DRAFT) {
-            throw new BusinessException("仅草稿状态的报销单可以提交");
+        if (this != DRAFT && this != REJECTED) {
+            throw new BusinessException("仅草稿或已驳回状态的报销单可以提交");
         }
         return PENDING;
     }
