@@ -717,6 +717,7 @@ export interface ExchangeRateRow {
   cashSell: string
   bocRate: string
   publishTime: string
+  pair?: string
   date?: string
 }
 
