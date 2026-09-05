@@ -63,23 +63,23 @@ onMounted(loadLatest)
     <el-card shadow="never">
       <div class="table-toolbar">
         <div class="toolbar-filters">
-          <template v-if="!query.date">
-            <el-button type="primary" @click="loadLatest">刷新最新牌价</el-button>
-            <span class="source-tip">当前展示：中国银行今日外汇牌价（每 100 外币兑人民币）</span>
-          </template>
-          <template v-else>
-            <el-date-picker
-              v-model="query.date"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="选择日期"
-              style="width: 160px"
-              :clearable="false"
-            />
-            <el-button type="primary" style="margin-left: 8px" @click="loadHistory">按日期查询</el-button>
-            <el-button @click="backToLatest">返回最新</el-button>
-            <span class="source-tip">数据来源：中国外汇交易中心人民币汇率中间价</span>
-          </template>
+          <el-date-picker
+            v-model="query.date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择日期查询历史中间价"
+            style="width: 180px"
+            :clearable="false"
+          />
+          <el-button type="primary" style="margin-left: 8px" @click="query.date ? loadHistory() : loadLatest()">
+            {{ query.date ? '按日期查询' : '刷新最新牌价' }}
+          </el-button>
+          <el-button v-if="query.date" @click="backToLatest">返回最新</el-button>
+          <span class="source-tip">
+            {{ query.date
+              ? '历史日期为：中国外汇交易中心人民币汇率中间价'
+              : '当前展示：中国银行今日外汇牌价（每 100 外币兑人民币）' }}
+          </span>
         </div>
       </div>
 
