@@ -14,6 +14,11 @@ export function pageProjects(params: {
   return request.get('/projects', { params })
 }
 
+/** 项目下拉选项：全部非归档项目，不做部门隔离 */
+export function projectOptions(): Promise<ProjectItem[]> {
+  return request.get('/projects/options')
+}
+
 /** 登记项目 */
 export function createProject(data: ProjectRequest): Promise<void> {
   return request.post('/projects', data)

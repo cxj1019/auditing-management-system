@@ -23,7 +23,7 @@ import {
   getReimbAttPreviewUrl,
 } from '@/api/reimbursement'
 import AttachmentLink from '@/components/AttachmentLink.vue'
-import { pageProjects } from '@/api/project'
+import { projectOptions as projectOptionsApi } from '@/api/project'
 import { useUserStore } from '@/stores/user'
 import type {
   ProjectItem,
@@ -125,8 +125,8 @@ const currentBillId = computed(() => editingId.value || detail.value?.id || 0)
 const itemsTotal = computed(() => form.items.reduce((sum, i) => sum + Number(i.amount || 0), 0))
 
 async function loadProjectOptions(): Promise<void> {
-  const data = await pageProjects({ current: 1, size: 200 })
-  projectOptions.value = data.records
+  // 专用选项接口：全部非归档项目、不做部门隔离，报销可归集到任何在做的项目
+  projectOptions.value = await projectOptionsApi()
 }
 
 function openCreate(): void {

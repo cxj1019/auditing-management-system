@@ -7,6 +7,7 @@ import com.accounting.firm.common.exception.BusinessException;
 import com.accounting.firm.common.security.DataScopeService;
 import com.accounting.firm.contract.entity.Contract;
 import com.accounting.firm.contract.mapper.ContractMapper;
+import com.accounting.firm.project.dto.ProjectOptionVO;
 import com.accounting.firm.project.dto.ProjectRequest;
 import com.accounting.firm.project.entity.Project;
 import com.accounting.firm.project.entity.ProjectStatus;
@@ -76,6 +77,27 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
             });
         }
         return new PageResult<>(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize());
+    }
+
+    @Override
+    public List<ProjectOptionVO> listOptions() {
+        List<Project> projects = lambdaQuery()
+                .ne(Project::getStatus, ProjectStatus.ARCHIVED.getCode())
+                .orderByDesc(Project::getCreateTime)
+                .list();
+        List<Long> clientIds = projects.stream().map(Project::getClientId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        Map<Long, String> clientNames = clientIds.isEmpty() ? Map.of()
+                : clientMapper.selectBatchIds(clientIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(Client::getId, Client::getClientName));
+        return projects.stream().map(p -> {
+            ProjectOptionVO vo = new ProjectOptionVO();
+            vo.setId(p.getId());
+            vo.setProjectNo(p.getProjectNo());
+            vo.setName(p.getName());
+            vo.setClientName(clientNames.get(p.getClientId()));
+            return vo;
+        }).toList();
     }
 
     @Override

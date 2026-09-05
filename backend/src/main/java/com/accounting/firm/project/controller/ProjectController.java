@@ -3,6 +3,7 @@ package com.accounting.firm.project.controller;
 import com.accounting.firm.common.aop.AuditLog;
 import com.accounting.firm.common.api.ApiResult;
 import com.accounting.firm.common.api.PageResult;
+import com.accounting.firm.project.dto.ProjectOptionVO;
 import com.accounting.firm.project.dto.ProjectRequest;
 import com.accounting.firm.project.entity.Project;
 import com.accounting.firm.project.service.ProjectService;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 项目管理接口
@@ -45,6 +47,13 @@ public class ProjectController {
                                                @RequestParam(required = false)
                                                @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         return ApiResult.success(projectService.pageProjects(current, size, status, type, keyword, startDate, endDate));
+    }
+
+    /** 项目下拉选项：全部非归档项目，不做部门隔离（报销等成本归集场景需要跨部门关联项目） */
+    @PreAuthorize("hasAnyAuthority('business:project:list', 'business:reimbursement:add')")
+    @GetMapping("/options")
+    public ApiResult<List<ProjectOptionVO>> options() {
+        return ApiResult.success(projectService.listOptions());
     }
 
     /** 登记项目 */

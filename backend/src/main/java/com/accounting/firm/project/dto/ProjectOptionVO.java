@@ -1,0 +1,19 @@
+package com.accounting.firm.project.dto;
+
+import lombok.Data;
+
+/**
+ * 项目下拉选项视图对象：仅含关联所需的最小字段
+ */
+@Data
+public class ProjectOptionVO {
+
+    private Long id;
+
+    private String projectNo;
+
+    private String name;
+
+    /** 客户名称（可空，用于辅助识别） */
+    private String clientName;
+}
