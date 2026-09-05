@@ -3,9 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pageProjects, createProject, updateProject, deleteProject, changeProjectStatus, listProjectMembers, addProjectMember, removeProjectMember } from '@/api/project'
 import { pageClients } from '@/api/client'
-import { getUserOptions } from '@/api/user'
+import { getUserOptions, getDepartmentOptions } from '@/api/user'
+import { useUserStore } from '@/stores/user'
 import { listBusinessTypes } from '@/api/businessType'
-import type { BusinessTypeItem, ClientItem, ProjectItem, ProjectMemberItem, ProjectRequest, ProjectStatus, UserOption } from '@/types'
+import type { BusinessTypeItem, ClientItem, DepartmentItem, ProjectItem, ProjectMemberItem, ProjectRequest, ProjectStatus, UserOption } from '@/types'
 
 /** 业务类型字典（项目性质 → 项目类型 → 业务类型，按附件配置导入） */
 const bizDict = ref<BusinessTypeItem[]>([])
@@ -102,6 +103,7 @@ const form = reactive<ProjectRequest>({
   bizNature: '',
   bizType: '',
   clientId: 0,
+  deptId: 0,
   partnerName: '',
   managerName: '',
   siteLeaderName: '',
@@ -112,6 +114,19 @@ const form = reactive<ProjectRequest>({
 /** 在册人员选项（供项目经理/现场负责人下拉选择） */
 const userOptions = ref<UserOption[]>([])
 const clientOptions = ref<ClientItem[]>([])
+const deptOptions = ref<DepartmentItem[]>([])
+const userStore = useUserStore()
+/** 部门名称映射（列表展示用） */
+const deptNameMap = computed(() => {
+  const map: Record<number, string> = {}
+  deptOptions.value.forEach(d => { map[d.id] = d.deptName })
+  return map
+})
+
+async function loadDeptOptions(): Promise<void> {
+  // 用免权限的 /departments/options，普通员工也能打开本页
+  deptOptions.value = await getDepartmentOptions()
+}
 
 async function loadClientOptions(): Promise<void> {
   const data = await pageClients({ current: 1, size: 200 })
@@ -124,9 +139,11 @@ async function loadUserOptions(): Promise<void> {
 
 function openCreate(): void {
   isEdit.value = false
-  Object.assign(form, { id: undefined, name: '', type: '', bizNature: '收入型', bizType: '', clientId: 0, managerName: '', siteLeaderName: '', startDate: '', endDate: '', remark: '' })
+  // 默认归属创建人所在部门，可改选
+  Object.assign(form, { id: undefined, name: '', type: '', bizNature: '收入型', bizType: '', clientId: 0, deptId: userStore.deptId ?? 0, managerName: '', siteLeaderName: '', startDate: '', endDate: '', remark: '' })
   loadUserOptions()
   loadClientOptions()
+  loadDeptOptions()
   dialogVisible.value = true
 }
 
@@ -139,6 +156,7 @@ function openEdit(row: ProjectItem): void {
     bizNature: row.bizNature || '',
     bizType: row.bizType || '',
     clientId: row.clientId,
+    deptId: row.deptId,
     partnerName: row.partnerName || '',
     managerName: row.managerName,
     siteLeaderName: row.siteLeaderName,
@@ -148,10 +166,13 @@ function openEdit(row: ProjectItem): void {
   })
   loadUserOptions()
   loadClientOptions()
+  loadDeptOptions()
   dialogVisible.value = true
 }
 
 async function handleSave(): Promise<void> {
+  if (!form.clientId) { ElMessage.warning('请选择客户'); return }
+  if (!form.deptId) { ElMessage.warning('请选择归属部门'); return }
   saving.value = true
   try {
     if (isEdit.value) {
@@ -204,6 +225,7 @@ async function handleTransit(row: ProjectItem, action: 'finish' | 'reopen' | 'ar
 onMounted(() => {
   fetchList()
   loadBizDict()
+  loadDeptOptions()
 })
 // ---------- 参与人员 ----------
 const memberRoles = ['合伙人', '项目经理', '现场负责人', '组员']
@@ -281,6 +303,9 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
           <template #default="{ row }">{{ row.bizType || '—' }}</template>
         </el-table-column>
         <el-table-column prop="clientName" label="客户" min-width="140" show-overflow-tooltip />
+        <el-table-column label="归属部门" width="100">
+          <template #default="{ row }">{{ deptNameMap[row.deptId] || '—' }}</template>
+        </el-table-column>
         <el-table-column prop="managerName" label="项目经理" width="100" />
         <el-table-column prop="partnerName" label="合伙人" width="100" />
         <el-table-column prop="siteLeaderName" label="现场负责人" width="110" />
@@ -352,6 +377,11 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
         <el-form-item label="客户" required>
           <el-select v-model="form.clientId" placeholder="选择客户" filterable style="width: 100%">
             <el-option v-for="c in clientOptions" :key="c.id" :label="`${c.clientNo} | ${c.clientName}`" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="归属部门" required>
+          <el-select v-model="form.deptId" placeholder="选择归属部门（部门内成员共同维护本项目）" style="width: 100%">
+            <el-option v-for="d in deptOptions" :key="d.id" :label="d.deptName" :value="d.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="项目合伙人" required>

@@ -128,7 +128,7 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
         return result;
     }
 
-    /** 项目数据范围：管理员看全部；有部门的经理/合伙人看本部门客户的项目；无部门的非管理员只看自己创建的项目 */
+    /** 项目数据范围：管理员看全部；有部门的经理/合伙人看本部门项目的数据；无部门的非管理员只看自己创建的项目 */
     private ProjectScope projectScope() {
         var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof SecurityUser user && !user.hasRole("admin")) {

@@ -61,8 +61,10 @@ public class InvoiceServiceImpl extends ServiceImpl<InvoiceMapper, Invoice>
     public PageResult<InvoiceVO> pageInvoices(long current, long size, String keyword,
                                               String type, Integer status) {
         Page<?> page = new Page<>(current, size);
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
-        var result = baseMapper.selectInvoicePage(page, keyword, type, status, scope);
+        var scope = dataScopeService.currentScope();
+        var result = baseMapper.selectInvoicePage(page, keyword, type, status,
+                scope.type() == DataScopeService.ScopeType.DEPT ? scope.deptId() : null,
+                scope.type() == DataScopeService.ScopeType.SELF ? scope.username() : null);
         return new PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
     }
 
@@ -154,9 +156,11 @@ public class InvoiceServiceImpl extends ServiceImpl<InvoiceMapper, Invoice>
 
     @Override
     public List<InvoiceOptionVO> options(String keyword) {
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
+        var scope = dataScopeService.currentScope();
         List<InvoiceVO> issued = baseMapper.selectInvoicePage(
-                new Page<>(1, 500), keyword, null, InvoiceStatus.ISSUED.getCode(), scope).getRecords();
+                new Page<>(1, 500), keyword, null, InvoiceStatus.ISSUED.getCode(),
+                scope.type() == DataScopeService.ScopeType.DEPT ? scope.deptId() : null,
+                scope.type() == DataScopeService.ScopeType.SELF ? scope.username() : null).getRecords();
         return issued.stream().map(vo -> {
             InvoiceOptionVO option = new InvoiceOptionVO();
             option.setId(vo.getId());
@@ -173,8 +177,10 @@ public class InvoiceServiceImpl extends ServiceImpl<InvoiceMapper, Invoice>
 
     @Override
     public List<InvoiceSummaryVO> summary(String keyword) {
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
-        List<InvoiceSummaryVO> rows = baseMapper.selectInvoiceSummary(keyword, scope);
+        var scope = dataScopeService.currentScope();
+        List<InvoiceSummaryVO> rows = baseMapper.selectInvoiceSummary(keyword,
+                scope.type() == DataScopeService.ScopeType.DEPT ? scope.deptId() : null,
+                scope.type() == DataScopeService.ScopeType.SELF ? scope.username() : null);
         rows.forEach(InvoiceSummaryVO::fillDerived);
         return rows;
     }

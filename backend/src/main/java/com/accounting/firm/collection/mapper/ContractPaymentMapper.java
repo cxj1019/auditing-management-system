@@ -36,10 +36,10 @@ public interface ContractPaymentMapper extends BaseMapper<ContractPayment> {
                 </if>
                 <if test="startDate != null">AND p.payment_date &gt;= #{startDate}</if>
                 <if test="endDate != null">AND p.payment_date &lt;= #{endDate}</if>
-                <if test="createByList != null and createByList.size() > 0">
-                    AND c.create_by IN
-                    <foreach item="item" collection="createByList" open="(" separator="," close=")">#{item}</foreach>
+                <if test="deptId != null">
+                    AND c.project_id IN (SELECT id FROM project WHERE dept_id = #{deptId})
                 </if>
+                <if test="selfCreateBy != null">AND c.create_by = #{selfCreateBy}</if>
             </where>
             ORDER BY p.payment_date DESC, p.id DESC
             </script>
@@ -48,7 +48,8 @@ public interface ContractPaymentMapper extends BaseMapper<ContractPayment> {
                                        @Param("keyword") String keyword,
                                        @Param("startDate") LocalDate startDate,
                                        @Param("endDate") LocalDate endDate,
-                                       @Param("createByList") List<String> createByList);
+                                       @Param("deptId") Long deptId,
+                                       @Param("selfCreateBy") String selfCreateBy);
 
     /** 按合同维度汇总收款（LEFT JOIN 保证零收款合同也出现） */
     @Select("""
@@ -65,10 +66,16 @@ public interface ContractPaymentMapper extends BaseMapper<ContractPayment> {
                     AND (c.contract_no LIKE '%' || #{keyword} || '%' OR c.name LIKE '%' || #{keyword} || '%'
                          OR cl.client_name LIKE '%' || #{keyword} || '%')
                 </if>
+                <if test="deptId != null">
+                    AND c.project_id IN (SELECT id FROM project WHERE dept_id = #{deptId})
+                </if>
+                <if test="selfCreateBy != null">AND c.create_by = #{selfCreateBy}</if>
             </where>
             GROUP BY c.id, c.contract_no, c.name, cl.client_name, c.amount, c.create_time
             ORDER BY c.create_time DESC
             </script>
             """)
-    List<CollectionSummaryVO> selectSummary(@Param("keyword") String keyword);
+    List<CollectionSummaryVO> selectSummary(@Param("keyword") String keyword,
+                                            @Param("deptId") Long deptId,
+                                            @Param("selfCreateBy") String selfCreateBy);
 }

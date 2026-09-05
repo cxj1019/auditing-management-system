@@ -11,8 +11,9 @@ import java.util.List;
 
 /**
  * 数据范围过滤服务
- * <p>按部门隔离业务数据：非 admin 用户只能看到本部门（dept_id 匹配）的数据；
- * admin 和未分配部门的用户不受限制。</p>
+ * <p>数据权限按<b>项目归属部门</b>隔离：项目登记时确定所属部门，
+ * 与项目相关的业务数据（合同、发票、函证、收款、报销等）对该部门全体成员可见可编辑；
+ * admin 看全部；未分配部门的用户仅能看自己创建的数据。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -20,32 +21,47 @@ public class DataScopeService {
 
     private final SysUserMapper sysUserMapper;
 
+    /** 数据范围类型：ALL-全部（admin） DEPT-本部门 SELF-仅本人创建 */
+    public enum ScopeType { ALL, DEPT, SELF }
+
     /**
-     * 判断当前用户是否需要部门数据过滤
-     * <p>admin 不受限；有部门 → 限定本部门；无部门 → 仅看自己创建的数据。</p>
+     * 当前用户的数据范围
      *
-     * @return 需要过滤时返回允许查看的用户名列表；不需要过滤（admin）返回 null
+     * @param type   范围类型
+     * @param deptId DEPT 时的部门 ID
+     * @param userId SELF 时的用户 ID
+     * @param username SELF 时的用户名（按 create_by 快照过滤用）
      */
-    public List<String> getDeptScopedUsernames() {
+    public record Scope(ScopeType type, Long deptId, Long userId, String username) {
+
+        /** 是否不加任何过滤（admin） */
+        public boolean isAll() {
+            return type == ScopeType.ALL;
+        }
+
+        /** 项目部门过滤条件：按 project_id 关联项目部门的子查询条件（须与项目表实际列名一致） */
+        public String projectDeptInSql() {
+            return "SELECT id FROM project WHERE dept_id = " + deptId;
+        }
+    }
+
+    /** 解析当前用户的数据范围（未登录等异常情况按 SELF 兜底） */
+    public Scope currentScope() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (!(auth != null && auth.getPrincipal() instanceof SecurityUser user)) {
-            return null;
+            return new Scope(ScopeType.SELF, null, null, "");
         }
         if (user.hasRole("admin")) {
-            return null;
+            return new Scope(ScopeType.ALL, null, null, null);
         }
         if (user.getDeptId() != null) {
-            return sysUserMapper.selectList(
-                            new LambdaQueryWrapper<SysUser>().eq(SysUser::getDeptId, user.getDeptId()))
-                    .stream().map(SysUser::getUsername).toList();
+            return new Scope(ScopeType.DEPT, user.getDeptId(), user.getUserId(), user.getUsername());
         }
-        return List.of(user.getUsername());
+        return new Scope(ScopeType.SELF, null, user.getUserId(), user.getUsername());
     }
 
     /**
-     * 获取当前用户数据范围内可见的用户 ID 列表
-     * <p>与 {@link #getDeptScopedUsernames()} 同规则，但按用户 ID 表达，
-     * 适用于按业务归属人（如日程的 user_id）而非创建人过滤的场景。</p>
+     * 判断当前用户是否需要按人员过滤（日程工时等按业务归属人统计的场景）
      *
      * @return 需要过滤时返回允许查看的用户 ID 列表；不需要过滤（admin）返回 null
      */
@@ -63,21 +79,5 @@ public class DataScopeService {
                     .stream().map(SysUser::getId).toList();
         }
         return List.of(user.getUserId());
-    }
-
-    /**
-     * 获取当前用户的部门 ID
-     *
-     * @return 部门 ID；admin 或未分配部门的用户返回 null（表示不过滤）
-     */
-    public Long getCurrentUserDeptId() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (!(auth != null && auth.getPrincipal() instanceof SecurityUser user)) {
-            return null;
-        }
-        if (user.hasRole("admin")) {
-            return null;
-        }
-        return user.getDeptId();
     }
 }

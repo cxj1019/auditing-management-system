@@ -41,6 +41,9 @@ public class Project implements Serializable {
     /** 关联客户 ID */
     private Long clientId;
 
+    /** 归属部门 ID（数据权限按此隔离：部门内成员可见可编辑本项目相关事项） */
+    private Long deptId;
+
     /** 客户名称（非数据库字段，联表填充） */
     @TableField(exist = false)
     private String clientName;

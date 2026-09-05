@@ -1,7 +1,6 @@
 package com.accounting.firm.client.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -20,9 +19,6 @@ public class ClientRequest {
     /** domestic=境内 overseas=境外 */
     @NotBlank(message = "客户类型不能为空")
     private String clientType;
-
-    @NotNull(message = "所属部门不能为空")
-    private Long deptId;
 
     @Size(max = 50, message = "统一信用代码长度不能超过 50")
     private String creditCode;

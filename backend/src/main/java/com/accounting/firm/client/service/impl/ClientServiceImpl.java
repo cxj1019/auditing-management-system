@@ -6,8 +6,6 @@ import com.accounting.firm.client.mapper.ClientMapper;
 import com.accounting.firm.client.service.ClientService;
 import com.accounting.firm.common.api.PageResult;
 import com.accounting.firm.common.exception.BusinessException;
-import com.accounting.firm.common.security.DataScopeService;
-import com.accounting.firm.common.security.SecurityUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -17,30 +15,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
-import java.util.List;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ClientServiceImpl extends ServiceImpl<ClientMapper, Client> implements ClientService {
 
-    private final DataScopeService dataScopeService;
-
     @Override
     public PageResult<Client> pageClients(long current, long size, String keyword,
-                                          String clientType, Long deptId) {
+                                          String clientType) {
         LambdaQueryWrapper<Client> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(StringUtils.hasText(clientType), Client::getClientType, clientType)
-                .eq(deptId != null, Client::getDeptId, deptId);
+        wrapper.eq(StringUtils.hasText(clientType), Client::getClientType, clientType);
         if (StringUtils.hasText(keyword)) {
             wrapper.and(w -> w.like(Client::getClientNo, keyword)
                     .or().like(Client::getClientName, keyword));
         }
-        // 部门数据隔离：非 admin 用户只看本部门客户
-        Long userDeptId = dataScopeService.getCurrentUserDeptId();
-        if (userDeptId != null) {
-            wrapper.eq(Client::getDeptId, userDeptId);
-        }
+        // 客户不再归属部门，全员可见；部门隔离由项目维度承担
         wrapper.orderByDesc(Client::getCreateTime);
         Page<Client> page = page(new Page<>(current, size), wrapper);
         return new PageResult<>(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize());
@@ -99,7 +89,6 @@ public class ClientServiceImpl extends ServiceImpl<ClientMapper, Client> impleme
     private void copyFields(ClientRequest request, Client client) {
         client.setClientName(request.getClientName());
         client.setClientType(request.getClientType());
-        client.setDeptId(request.getDeptId());
         client.setCreditCode(request.getCreditCode());
         client.setRegisteredCapital(request.getRegisteredCapital());
         client.setRegisteredAddress(request.getRegisteredAddress());

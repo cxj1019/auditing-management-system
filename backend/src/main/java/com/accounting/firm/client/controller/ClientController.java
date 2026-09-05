@@ -34,9 +34,8 @@ public class ClientController {
     public ApiResult<PageResult<Client>> page(@RequestParam(defaultValue = "1") long current,
                                               @RequestParam(defaultValue = "10") long size,
                                               @RequestParam(required = false) String keyword,
-                                              @RequestParam(required = false) String clientType,
-                                              @RequestParam(required = false) Long deptId) {
-        return ApiResult.success(clientService.pageClients(current, size, keyword, clientType, deptId));
+                                              @RequestParam(required = false) String clientType) {
+        return ApiResult.success(clientService.pageClients(current, size, keyword, clientType));
     }
 
     @AuditLog("登记客户")

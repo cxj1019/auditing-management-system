@@ -24,6 +24,7 @@ import com.accounting.firm.reimbursement.mapper.ReimbursementMapper;
 import com.accounting.firm.schedule.entity.Schedule;
 import com.accounting.firm.schedule.mapper.ScheduleMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -65,15 +66,15 @@ public class DashboardController {
     public ApiResult<DashboardVO> dashboard(@AuthenticationPrincipal SecurityUser currentUser) {
         DashboardVO vo = new DashboardVO();
         LocalDate today = LocalDate.now();
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
+        var scope = dataScopeService.currentScope();
 
         // ---------- 待办计数 ----------
         DashboardVO.Todo todo = new DashboardVO.Todo();
         todo.setPendingReimbursement(countReimbursementPending(scope));
         todo.setPendingInvoice(countPendingInvoices(scope));
         todo.setOverdueReceivable(countOverdueReceivables(today));
-        todo.setOverdueConfirmation(countOverdueConfirmations(today));
-        todo.setExpiringContract(countExpiringContracts(today));
+        todo.setOverdueConfirmation(countOverdueConfirmations(today, scope));
+        todo.setExpiringContract(countExpiringContracts(today, scope));
         vo.setTodo(todo);
 
         // 普通员工不展示工时与成本/经营数据
@@ -154,20 +155,22 @@ public class DashboardController {
         return ApiResult.success(vo);
     }
 
-    private long countReimbursementPending(List<String> scope) {
+    private long countReimbursementPending(DataScopeService.Scope scope) {
         LambdaQueryWrapper<Reimbursement> wrapper = new LambdaQueryWrapper<Reimbursement>()
                 .in(Reimbursement::getStatus, 1, 4);
-        if (scope != null) {
-            wrapper.in(Reimbursement::getCreateBy, scope);
-        }
+        applyProjectDeptScope(wrapper, scope, Reimbursement::getProjectId, Reimbursement::getCreateBy);
         return reimbursementMapper.selectCount(wrapper);
     }
 
-    private long countPendingInvoices(List<String> scope) {
+    private long countPendingInvoices(DataScopeService.Scope scope) {
         LambdaQueryWrapper<Invoice> wrapper = new LambdaQueryWrapper<Invoice>()
                 .eq(Invoice::getStatus, InvoiceStatus.PENDING.getCode());
-        if (scope != null) {
-            wrapper.in(Invoice::getCreateBy, scope);
+        // 发票经合同挂项目：按合同的 project_id 关联项目部门
+        switch (scope.type()) {
+            case DEPT -> wrapper.inSql(Invoice::getContractId,
+                    "SELECT id FROM contract WHERE project_id IN (" + scope.projectDeptInSql() + ")");
+            case SELF -> wrapper.eq(Invoice::getCreateBy, scope.username());
+            default -> { }
         }
         return invoiceMapper.selectCount(wrapper);
     }
@@ -186,27 +189,35 @@ public class DashboardController {
         }).count();
     }
 
-    private long countOverdueConfirmations(LocalDate today) {
+    private long countOverdueConfirmations(LocalDate today, DataScopeService.Scope scope) {
         LambdaQueryWrapper<Confirmation> wrapper = new LambdaQueryWrapper<Confirmation>()
                 .eq(Confirmation::getStatus, 1)
                 .le(Confirmation::getSentDate, today.minusDays(30));
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
-        if (scope != null) {
-            wrapper.in(Confirmation::getCreateBy, scope);
-        }
+        applyProjectDeptScope(wrapper, scope, Confirmation::getProjectId, Confirmation::getCreateBy);
         return confirmationMapper.selectCount(wrapper);
     }
 
-    private long countExpiringContracts(LocalDate today) {
+    private long countExpiringContracts(LocalDate today, DataScopeService.Scope scope) {
         LambdaQueryWrapper<Contract> wrapper = new LambdaQueryWrapper<Contract>()
                 .eq(Contract::getStatus, ContractStatus.RUNNING.getCode())
                 .ge(Contract::getServiceEnd, today)
                 .le(Contract::getServiceEnd, today.plusDays(30));
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
-        if (scope != null) {
-            wrapper.in(Contract::getCreateBy, scope);
-        }
+        applyProjectDeptScope(wrapper, scope, Contract::getProjectId, Contract::getCreateBy);
         return contractMapper.selectCount(wrapper);
+    }
+
+    /**
+     * 按项目部门套用数据范围：DEPT → project_id 命中本部门项目（无项目的数据视为公共，一并计入）；
+     * SELF → 仅本人创建；ALL → 不加条件
+     */
+    private <T> void applyProjectDeptScope(LambdaQueryWrapper<T> wrapper, DataScopeService.Scope scope,
+                                           SFunction<T, Long> projectIdGetter, SFunction<T, String> createByGetter) {
+        switch (scope.type()) {
+            case DEPT -> wrapper.and(w -> w.inSql(projectIdGetter, scope.projectDeptInSql())
+                    .or().isNull(projectIdGetter));
+            case SELF -> wrapper.eq(createByGetter, scope.username());
+            default -> { }
+        }
     }
 
     /** 回款进度百分比纯计算（聚合复用） */

@@ -141,6 +141,8 @@ export interface ProjectItem {
   bizType?: string
   clientId: number
   clientName?: string
+  deptId: number
+  deptName?: string
   partnerName?: string
   managerName: string
   siteLeaderName: string
@@ -159,6 +161,7 @@ export interface ProjectRequest {
   bizNature?: string
   bizType?: string
   clientId: number
+  deptId: number
   partnerName: string
   managerName: string
   siteLeaderName: string
@@ -183,8 +186,6 @@ export interface ClientItem {
   clientNo: string
   clientName: string
   clientType: string
-  deptId: number
-  deptName?: string
   creditCode?: string
   registeredCapital?: string
   registeredAddress?: string
@@ -206,7 +207,6 @@ export interface ClientItem {
 export interface ClientRequest {
   clientName: string
   clientType: string
-  deptId: number
   creditCode?: string
   registeredCapital?: string
   registeredAddress?: string
@@ -494,6 +494,7 @@ export interface ReimbursementItemData {
 export interface ReimbursementItem {
   id: number
   reimbursementNo: string
+  applicantId?: number
   applicantUsername: string
   applicantName?: string
   projectId?: number

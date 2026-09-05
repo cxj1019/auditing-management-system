@@ -36,6 +36,10 @@ public class ProjectRequest {
     @NotNull(message = "客户不能为空")
     private Long clientId;
 
+    /** 归属部门 ID（必填，决定项目相关数据对哪个部门可见可编辑） */
+    @NotNull(message = "归属部门不能为空")
+    private Long deptId;
+
     @NotBlank(message = "项目合伙人不能为空")
     @Size(max = 50, message = "项目合伙人长度不能超过 50")
     private String partnerName;

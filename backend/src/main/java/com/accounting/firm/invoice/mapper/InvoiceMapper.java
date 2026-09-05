@@ -44,10 +44,10 @@ public interface InvoiceMapper extends BaseMapper<Invoice> {
                 </if>
                 <if test="type != null and type != ''">AND i.type = #{type}</if>
                 <if test="status != null">AND i.status = #{status}</if>
-                <if test="createByList != null and createByList.size() > 0">
-                    AND i.create_by IN
-                    <foreach item="item" collection="createByList" open="(" separator="," close=")">#{item}</foreach>
+                <if test="deptId != null">
+                    AND c.project_id IN (SELECT id FROM project WHERE dept_id = #{deptId})
                 </if>
+                <if test="selfCreateBy != null">AND i.create_by = #{selfCreateBy}</if>
             </where>
             ORDER BY i.create_time DESC, i.id DESC
             </script>
@@ -56,7 +56,8 @@ public interface InvoiceMapper extends BaseMapper<Invoice> {
                                        @Param("keyword") String keyword,
                                        @Param("type") String type,
                                        @Param("status") Integer status,
-                                       @Param("createByList") List<String> createByList);
+                                       @Param("deptId") Long deptId,
+                                       @Param("selfCreateBy") String selfCreateBy);
 
     /** 按发票维度核销汇总（发票金额 vs 已收核销） */
     @Select("""
@@ -77,15 +78,16 @@ public interface InvoiceMapper extends BaseMapper<Invoice> {
                          OR c.name LIKE '%' || #{keyword} || '%'
                          OR cl.client_name LIKE '%' || #{keyword} || '%')
                 </if>
-                <if test="createByList != null and createByList.size() > 0">
-                    AND i.create_by IN
-                    <foreach item="item" collection="createByList" open="(" separator="," close=")">#{item}</foreach>
+                <if test="deptId != null">
+                    AND c.project_id IN (SELECT id FROM project WHERE dept_id = #{deptId})
                 </if>
+                <if test="selfCreateBy != null">AND i.create_by = #{selfCreateBy}</if>
             </where>
             GROUP BY i.id, i.invoice_no, i.type, c.contract_no, c.name, cl.client_name, i.amount, i.create_time
             ORDER BY i.create_time DESC, i.id DESC
             </script>
             """)
     List<InvoiceSummaryVO> selectInvoiceSummary(@Param("keyword") String keyword,
-                                                @Param("createByList") List<String> createByList);
+                                                @Param("deptId") Long deptId,
+                                                @Param("selfCreateBy") String selfCreateBy);
 }

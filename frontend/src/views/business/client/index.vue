@@ -2,8 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pageClients, createClient, updateClient, deleteClient } from '@/api/client'
-import { getDepartmentOptions } from '@/api/user'
-import type { ClientItem, ClientRequest, DepartmentItem } from '@/types'
+import type { ClientItem, ClientRequest } from '@/types'
 
 const clientTypes = ['境内', '境外']
 const typeLabels: Record<string, string> = { domestic: '境内', overseas: '境外' }
@@ -14,7 +13,7 @@ const records = ref<ClientItem[]>([])
 const total = ref(0)
 const query = reactive({
   current: 1, size: 10,
-  keyword: '', clientType: '', deptId: undefined as number | undefined,
+  keyword: '', clientType: '',
 })
 
 async function fetchList(): Promise<void> {
@@ -24,7 +23,6 @@ async function fetchList(): Promise<void> {
       ...query,
       keyword: query.keyword || undefined,
       clientType: query.clientType || undefined,
-      deptId: query.deptId || undefined,
     })
     records.value = data.records
     total.value = data.total
@@ -33,14 +31,14 @@ async function fetchList(): Promise<void> {
 
 function handleSearch(): void { query.current = 1; fetchList() }
 function handleReset(): void {
-  query.keyword = ''; query.clientType = ''; query.deptId = undefined; handleSearch()
+  query.keyword = ''; query.clientType = ''; handleSearch()
 }
 
 const dialogVisible = ref(false)
 const saving = ref(false)
 const isEdit = ref(false)
 const form = reactive<ClientRequest & { id?: number }>({
-  clientName: '', clientType: 'domestic', deptId: 0,
+  clientName: '', clientType: 'domestic',
   creditCode: '', registeredCapital: '', registeredAddress: '',
   legalRepresentative: '', businessScope: '',
   contactPerson: '', contactPhone: '',
@@ -48,17 +46,10 @@ const form = reactive<ClientRequest & { id?: number }>({
   invoiceBankAccount: '', invoiceAddress: '', invoicePhone: '',
   remark: '',
 })
-const deptOptions = ref<DepartmentItem[]>([])
-
-async function loadDeptOptions(): Promise<void> {
-  // 用免权限的 /departments/options，普通员工也能打开本页
-  deptOptions.value = await getDepartmentOptions()
-}
-
 function openCreate(): void {
   isEdit.value = false
   Object.assign(form, {
-    clientName: '', clientType: 'domestic', deptId: 0,
+    clientName: '', clientType: 'domestic',
     creditCode: '', registeredCapital: '', registeredAddress: '',
     legalRepresentative: '', businessScope: '',
     contactPerson: '', contactPhone: '',
@@ -66,14 +57,13 @@ function openCreate(): void {
     invoiceBankAccount: '', invoiceAddress: '', invoicePhone: '',
     remark: '',
   })
-  loadDeptOptions()
   dialogVisible.value = true
 }
 
 function openEdit(row: ClientItem): void {
   isEdit.value = true
   Object.assign(form, {
-    clientName: row.clientName, clientType: row.clientType, deptId: row.deptId,
+    clientName: row.clientName, clientType: row.clientType,
     creditCode: row.creditCode || '', registeredCapital: row.registeredCapital || '',
     registeredAddress: row.registeredAddress || '', legalRepresentative: row.legalRepresentative || '',
     businessScope: row.businessScope || '',
@@ -84,7 +74,6 @@ function openEdit(row: ClientItem): void {
     remark: row.remark || '',
   })
   form.id = row.id
-  loadDeptOptions()
   dialogVisible.value = true
 }
 
@@ -123,9 +112,6 @@ onMounted(fetchList)
           <el-input v-model="query.keyword" placeholder="客户编号/名称" clearable style="width: 200px" @keyup.enter="handleSearch" />
           <el-select v-model="query.clientType" placeholder="类型" clearable style="width: 100px; margin-left: 8px">
             <el-option v-for="t in clientTypes" :key="t" :label="t" :value="t" />
-          </el-select>
-          <el-select v-model="query.deptId" placeholder="部门" clearable style="width: 140px; margin-left: 8px">
-            <el-option v-for="d in deptOptions" :key="d.id" :label="d.deptName" :value="d.id" />
           </el-select>
           <el-button type="primary" style="margin-left: 8px" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
@@ -169,11 +155,6 @@ onMounted(fetchList)
           <el-select v-model="form.clientType" style="width: 100%">
             <el-option label="境内" value="domestic" />
             <el-option label="境外" value="overseas" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="所属部门" required>
-          <el-select v-model="form.deptId" placeholder="选择部门" style="width: 100%">
-            <el-option v-for="d in deptOptions" :key="d.id" :label="d.deptName" :value="d.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="统一信用代码">

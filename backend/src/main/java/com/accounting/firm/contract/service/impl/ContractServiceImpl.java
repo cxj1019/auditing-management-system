@@ -144,10 +144,12 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
                             + " WHERE p.id = contract.project_id AND c.client_name LIKE {0})",
                     "%" + clientName + "%");
         }
-        // 合伙人只能看本部门数据
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
-        if (scope != null) {
-            wrapper.in(Contract::getCreateBy, scope);
+        // 合同按项目归属部门隔离：admin 全部；本部门成员看本部门项目的合同；无部门用户仅看自己创建
+        var scope = dataScopeService.currentScope();
+        switch (scope.type()) {
+            case DEPT -> wrapper.inSql(Contract::getProjectId, scope.projectDeptInSql());
+            case SELF -> wrapper.eq(Contract::getCreateBy, scope.username());
+            default -> { }
         }
         wrapper.orderByDesc(Contract::getCreateTime);
         Page<Contract> page = page(new Page<>(current, size), wrapper);

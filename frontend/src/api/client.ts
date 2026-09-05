@@ -2,7 +2,7 @@ import request from './request'
 import type { ClientItem, ClientRequest, PageResult } from '@/types'
 
 export function pageClients(params: {
-  current: number; size: number; keyword?: string; clientType?: string; deptId?: number
+  current: number; size: number; keyword?: string; clientType?: string
 }): Promise<PageResult<ClientItem>> {
   return request.get('/clients', { params })
 }

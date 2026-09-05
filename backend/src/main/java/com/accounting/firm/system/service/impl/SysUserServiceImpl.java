@@ -82,8 +82,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createUser(UserRequest request) {
-        // 邮箱唯一性校验（邮箱即登录账号）
-        Long emailCount = lambdaQuery().eq(SysUser::getEmail, request.getEmail()).count();
+        // 邮箱唯一性校验（邮箱即登录账号，统一小写存储）
+        String email = request.getEmail() == null ? null : request.getEmail().trim().toLowerCase();
+        Long emailCount = lambdaQuery().eq(SysUser::getEmail, email).count();
         if (emailCount > 0) {
             throw new BusinessException("邮箱已被其他用户使用");
         }
@@ -91,10 +92,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             throw new BusinessException("密码不能为空");
         }
         SysUser user = new SysUser();
-        user.setUsername(request.getEmail().toLowerCase());
+        user.setUsername(email);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setNickname(request.getNickname());
-        user.setEmail(request.getEmail().toLowerCase());
+        user.setEmail(email);
         user.setPhone(request.getPhone());
         user.setDeptId(request.getDeptId());
         user.setStatus(request.getStatus() == null ? 1 : request.getStatus());
@@ -112,17 +113,19 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (user == null) {
             throw new BusinessException("用户不存在");
         }
-        // 邮箱唯一性校验（排除自身）
+        // 邮箱唯一性校验（排除自身，统一小写比较避免大小写绕过）
+        String email = request.getEmail() == null ? null : request.getEmail().trim().toLowerCase();
         Long emailCount = lambdaQuery()
-                .eq(SysUser::getEmail, request.getEmail())
+                .eq(SysUser::getEmail, email)
                 .ne(SysUser::getId, request.getId())
                 .count();
         if (emailCount > 0) {
             throw new BusinessException("邮箱已被其他用户使用");
         }
         user.setNickname(request.getNickname());
-        user.setEmail(request.getEmail());
-        user.setUsername(request.getEmail());
+        user.setEmail(email);
+        // 用户名与邮箱保持一致且全小写，避免编辑后大小写变化导致历史单据归属失效
+        user.setUsername(email);
         user.setPhone(request.getPhone());
         user.setDeptId(request.getDeptId());
         if (request.getStatus() != null) {

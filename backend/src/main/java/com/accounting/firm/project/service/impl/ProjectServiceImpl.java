@@ -5,6 +5,7 @@ import com.accounting.firm.client.mapper.ClientMapper;
 import com.accounting.firm.common.api.PageResult;
 import com.accounting.firm.common.exception.BusinessException;
 import com.accounting.firm.common.security.DataScopeService;
+import com.accounting.firm.common.security.DataScopeService.ScopeType;
 import com.accounting.firm.contract.entity.Contract;
 import com.accounting.firm.contract.mapper.ContractMapper;
 import com.accounting.firm.project.dto.ProjectOptionVO;
@@ -56,10 +57,12 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
                     .or().apply("EXISTS (SELECT 1 FROM client c WHERE c.id = project.client_id"
                             + " AND c.client_name LIKE {0})", "%" + keyword + "%"));
         }
-        // 合伙人只能看本部门数据
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
-        if (scope != null) {
-            wrapper.in(Project::getCreateBy, scope);
+        // 项目按归属部门隔离：admin 全部；本部门用户看本部门项目；无部门用户仅看自己创建
+        var scope = dataScopeService.currentScope();
+        switch (scope.type()) {
+            case DEPT -> wrapper.eq(Project::getDeptId, scope.deptId());
+            case SELF -> wrapper.eq(Project::getCreateBy, scope.username());
+            default -> { }
         }
         wrapper.ge(startDate != null, Project::getStartDate, startDate)
                 .le(endDate != null, Project::getStartDate, endDate)
@@ -81,10 +84,22 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
 
     @Override
     public List<ProjectOptionVO> listOptions() {
-        List<Project> projects = lambdaQuery()
-                .ne(Project::getStatus, ProjectStatus.ARCHIVED.getCode())
-                .orderByDesc(Project::getCreateTime)
-                .list();
+        // 与项目列表同规则按归属部门隔离
+        var scope = dataScopeService.currentScope();
+        List<Project> projects;
+        if (scope.isAll()) {
+            projects = lambdaQuery()
+                    .ne(Project::getStatus, ProjectStatus.ARCHIVED.getCode())
+                    .orderByDesc(Project::getCreateTime)
+                    .list();
+        } else {
+            projects = lambdaQuery()
+                    .ne(Project::getStatus, ProjectStatus.ARCHIVED.getCode())
+                    .eq(scope.type() == DataScopeService.ScopeType.DEPT, Project::getDeptId, scope.deptId())
+                    .eq(scope.type() == DataScopeService.ScopeType.SELF, Project::getCreateBy, scope.username())
+                    .orderByDesc(Project::getCreateTime)
+                    .list();
+        }
         List<Long> clientIds = projects.stream().map(Project::getClientId)
                 .filter(java.util.Objects::nonNull).distinct().toList();
         Map<Long, String> clientNames = clientIds.isEmpty() ? Map.of()
@@ -202,6 +217,7 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         project.setBizNature(request.getBizNature());
         project.setBizType(request.getBizType());
         project.setClientId(request.getClientId());
+        project.setDeptId(request.getDeptId());
         project.setPartnerName(request.getPartnerName());
         project.setManagerName(request.getManagerName());
         project.setSiteLeaderName(request.getSiteLeaderName());

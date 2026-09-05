@@ -37,7 +37,7 @@ public interface CostAnalysisMapper {
                     AND (p.project_no LIKE '%' || #{keyword} || '%' OR p.name LIKE '%' || #{keyword} || '%'
                          OR cl.client_name LIKE '%' || #{keyword} || '%')
                 </if>
-                <if test="deptId != null">AND cl.dept_id = #{deptId}</if>
+                <if test="deptId != null">AND p.dept_id = #{deptId}</if>
                 <if test="ownUsername != null">AND p.create_by = #{ownUsername}</if>
                 <if test="year != null">AND EXTRACT(YEAR FROM p.start_date) = #{year}</if>
             </where>

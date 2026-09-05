@@ -54,10 +54,12 @@ public class ConfirmationServiceImpl extends ServiceImpl<ConfirmationMapper, Con
                     .or().like(Confirmation::getSummary, keyword));
         }
         wrapper.orderByDesc(Confirmation::getCreateTime);
-        // 合伙人/员工只能看本部门（或自己）的数据
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
-        if (scope != null) {
-            wrapper.in(Confirmation::getCreateBy, scope);
+        // 函证按项目归属部门隔离：admin 全部；本部门成员看本部门项目的函证；无部门用户仅看自己创建
+        var scope = dataScopeService.currentScope();
+        switch (scope.type()) {
+            case DEPT -> wrapper.inSql(Confirmation::getProjectId, scope.projectDeptInSql());
+            case SELF -> wrapper.eq(Confirmation::getCreateBy, scope.username());
+            default -> { }
         }
         Page<Confirmation> page = page(new Page<>(current, size), wrapper);
         LocalDate deadline = LocalDate.now().minusDays(overdueDays);

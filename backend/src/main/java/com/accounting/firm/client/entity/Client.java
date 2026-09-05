@@ -31,9 +31,6 @@ public class Client implements Serializable {
     /** 客户类型：domestic=境内 overseas=境外 */
     private String clientType;
 
-    /** 所属部门 ID */
-    private Long deptId;
-
     /** 统一社会信用代码 */
     private String creditCode;
 

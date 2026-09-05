@@ -39,8 +39,10 @@ public class CollectionServiceImpl extends ServiceImpl<ContractPaymentMapper, Co
     public PageResult<PaymentVO> pagePayments(long current, long size, String keyword,
                                               LocalDate startDate, LocalDate endDate) {
         Page<?> page = new Page<>(current, size);
-        List<String> scope = dataScopeService.getDeptScopedUsernames();
-        List<PaymentVO> records = baseMapper.selectPaymentPage(page, keyword, startDate, endDate, scope).getRecords();
+        var scope = dataScopeService.currentScope();
+        List<PaymentVO> records = baseMapper.selectPaymentPage(page, keyword, startDate, endDate,
+                scope.type() == DataScopeService.ScopeType.DEPT ? scope.deptId() : null,
+                scope.type() == DataScopeService.ScopeType.SELF ? scope.username() : null).getRecords();
         return new PageResult<>(records, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
@@ -99,7 +101,10 @@ public class CollectionServiceImpl extends ServiceImpl<ContractPaymentMapper, Co
 
     @Override
     public List<CollectionSummaryVO> summary(String keyword) {
-        List<CollectionSummaryVO> rows = baseMapper.selectSummary(keyword);
+        var scope = dataScopeService.currentScope();
+        List<CollectionSummaryVO> rows = baseMapper.selectSummary(keyword,
+                scope.type() == DataScopeService.ScopeType.DEPT ? scope.deptId() : null,
+                scope.type() == DataScopeService.ScopeType.SELF ? scope.username() : null);
         rows.forEach(CollectionSummaryVO::fillDerived);
         return rows;
     }
