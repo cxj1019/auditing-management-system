@@ -42,6 +42,18 @@ public class Contract implements Serializable {
     /** 合同金额（元） */
     private BigDecimal amount;
 
+    /** 币种：人民币/美元/日元/欧元/港币/英镑 */
+    private String currency;
+
+    /** 外币金额 */
+    private BigDecimal foreignAmount;
+
+    /** 中国银行牌价（每 100 外币兑人民币） */
+    private BigDecimal exchangeRate;
+
+    /** 牌价发布时间（留存备查） */
+    private String ratePublishTime;
+
     /** 签约日期 */
     private LocalDate signDate;
 

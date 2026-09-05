@@ -5,3 +5,8 @@ import type { ExchangeRateRow } from '@/types'
 export function getBocRates(currencyName?: string): Promise<ExchangeRateRow[]> {
   return request.get('/exchange-rates', { params: currencyName ? { currencyName } : {} })
 }
+
+/** 历史人民币汇率中间价（中国外汇交易中心，按日期查询） */
+export function getBocHistory(date: string): Promise<{ currencyName: string; pair: string; rate: string; date: string }[]> {
+  return request.get('/exchange-rates/history', { params: { date } })
+}

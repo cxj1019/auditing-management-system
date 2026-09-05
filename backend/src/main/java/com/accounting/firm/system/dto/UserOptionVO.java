@@ -18,9 +18,9 @@ public class UserOptionVO {
 
     private String email;
 
-    /** 所属部门 ID（未分配则为 null） */
+    /** 所属部门 ID */
     private Long deptId;
 
-    /** 所属部门名称（未分配则为 null） */
+    /** 所属部门名称 */
     private String deptName;
 }

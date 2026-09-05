@@ -120,6 +120,17 @@ const rangeLabel = computed(() =>
 
 // ---------- 成员 ----------
 const userOptions = ref<UserOption[]>([])
+/** 日程板部门筛选:默认本部门(非管理员);管理员默认全部 */
+const boardDeptFilter = ref<number | undefined>(
+  userStore.hasRole('admin') ? undefined : userStore.deptId ?? undefined)
+
+function changeBoardDept(v: number | undefined): void {
+  boardDeptFilter.value = v
+}
+
+function changeBoardDeptHandler(): void {
+  // 占位:el-select @change 直接绑定 changeBoardDept
+}
 const memberSearch = ref('')
 const memberDeptFilter = ref<number | undefined>(undefined)
 const deptOptions = ref<DepartmentItem[]>([])
@@ -147,22 +158,34 @@ function addMember(id: number): void {
   }
 }
 const memberList = computed(() => {
-  const map = new Map<number, { id: number; name: string; dept: string; color: string; initial: string }>()
+  const map = new Map<number, { id: number; name: string; dept: string; deptId: number | null; color: string; initial: string }>()
   const optById = new Map(userOptions.value.map((u) => [u.id, u]))
   schedules.value.forEach((s) => {
     if (s.userId && !map.has(s.userId)) {
       // 姓名优先取人员选项中的昵称，其次后端填充的 creatorName
-      const name = optById.get(s.userId)?.nickname || s.creatorName || `用户${s.userId}`
-      map.set(s.userId, { id: s.userId, name, dept: optById.get(s.userId)?.deptName || '', color: getAvatarColor(name), initial: name.charAt(0) })
+      const opt = optById.get(s.userId)
+      const name = opt?.nickname || s.creatorName || `用户${s.userId}`
+      map.set(s.userId, { id: s.userId, name, dept: opt?.deptName || '', deptId: opt?.deptId ?? null, color: getAvatarColor(name), initial: name.charAt(0) })
     }
   })
   userOptions.value.forEach((u) => {
     if (!map.has(u.id)) {
       const name = u.nickname || u.username
-      map.set(u.id, { id: u.id, name, dept: u.deptName || '', color: getAvatarColor(name), initial: name.charAt(0) })
+      map.set(u.id, { id: u.id, name, dept: u.deptName || '', deptId: u.deptId ?? null, color: getAvatarColor(name), initial: name.charAt(0) })
     }
   })
-  return Array.from(map.values())
+  // 过滤(默认本部门) + 排序(本人置顶,其后按部门、姓名)
+  let list = Array.from(map.values())
+  if (boardDeptFilter.value != null) {
+    list = list.filter((m) => m.deptId === boardDeptFilter.value)
+  }
+  list.sort((a, b) => {
+    if (a.id === userStore.userId) return -1
+    if (b.id === userStore.userId) return 1
+    if (a.dept !== b.dept) return a.dept < b.dept ? -1 : 1
+    return a.name < b.name ? -1 : 1
+  })
+  return list
 })
 
 function getAvatarColor(name: string): string {
@@ -536,8 +559,10 @@ onMounted(() => {
       <div class="week-grid" v-if="viewMode === 'week'">
         <!-- 表头 -->
         <div class="grid-header sticky-col">
-          <span>成员</span>
-          <el-icon style="margin-left: auto"><ArrowDown /></el-icon>
+          <el-select :model-value="boardDeptFilter" placeholder="全部部门" clearable size="small"
+            style="width: 100%" @update:model-value="changeBoardDept">
+            <el-option v-for="d in deptOptions" :key="d.id" :label="d.deptName" :value="d.id" />
+          </el-select>
         </div>
         <div v-for="d in weekDays" :key="d.date" class="grid-header" :class="{ today: d.isToday, 'grid-header-holiday': isHoliday(d.date) }">
           <div class="header-date">{{ d.label }}</div>

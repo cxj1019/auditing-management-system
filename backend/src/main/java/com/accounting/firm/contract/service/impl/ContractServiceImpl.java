@@ -198,6 +198,7 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
             String contractNo = generateContractNo(request);
             Contract contract = new Contract();
             copyBasicFields(request, contract);
+            deriveFxAmount(contract);
             contract.setProjectId(request.getProjectId());
             contract.setContractNo(contractNo);
             contract.setStatus(ContractStatus.DRAFT.getCode());
@@ -226,6 +227,7 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
         validateDates(request);
         // 仅更新基本信息字段；编号、状态与所属项目不可通过编辑修改
         copyBasicFields(request, contract);
+        deriveFxAmount(contract);
         updateById(contract);
     }
 
@@ -326,6 +328,18 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
         return ContractNoGenerator.next(today, maxContract == null ? null : maxContract.getContractNo());
     }
 
+    /** 外币折算：非人民币且未填金额时，按 外币金额 ÷ 100 × 中行牌价 折算 */
+    private void deriveFxAmount(Contract contract) {
+        boolean isCny = contract.getCurrency() == null || "人民币".equals(contract.getCurrency());
+        if (contract.getAmount() != null || isCny
+                || contract.getForeignAmount() == null || contract.getExchangeRate() == null) {
+            return;
+        }
+        contract.setAmount(contract.getForeignAmount()
+                .multiply(contract.getExchangeRate())
+                .divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP));
+    }
+
     /** 服务期限校验：都填写时开始不得晚于结束（允许不约定期间） */
     private void validateDates(ContractRequest request) {
         if (request.getServiceStart() != null && request.getServiceEnd() != null
@@ -340,6 +354,10 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
         contract.setContractType(request.getContractType());
         contract.setBizType(request.getBizType());
         contract.setAmount(request.getAmount());
+        contract.setCurrency(StringUtils.hasText(request.getCurrency()) ? request.getCurrency() : "人民币");
+        contract.setForeignAmount(request.getForeignAmount());
+        contract.setExchangeRate(request.getExchangeRate());
+        contract.setRatePublishTime(request.getRatePublishTime());
         contract.setSignDate(request.getSignDate());
         contract.setServiceStart(request.getServiceStart());
         contract.setServiceEnd(request.getServiceEnd());

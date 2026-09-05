@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { pageProjects } from '@/api/project'
 import { listBusinessTypes } from '@/api/businessType'
+import { getBocRates } from '@/api/exchangeRate'
 import { getUserOptions } from '@/api/user'
 import {
   pageContracts,
@@ -30,12 +31,55 @@ const statusTagTypes: Record<number, 'info' | 'primary' | 'success' | 'danger'> 
 }
 /** 业务类型字典（收入型且有字号的业务，字号按其解析） */
 const bizDict = ref<BusinessTypeItem[]>([])
+const currencyNames: Record<string, string> = {
+  美元: '美元', 日元: '日元', 欧元: '欧元', 港币: '港币', 英镑: '英镑',
+}
+const currencies = ['人民币', ...Object.keys(currencyNames)]
 const bizOptions = computed(() => bizDict.value.filter((b) => b.bizNature === '收入型' && b.noChar))
 const projectTypesOfBiz = computed(() => [...new Set(bizOptions.value.map((b) => b.projectType))])
 
 async function loadBizDict(): Promise<void> {
   bizDict.value = await listBusinessTypes('收入型')
 }
+
+const isFx = computed(() => !!form.currency && form.currency !== '人民币')
+const rateInfo = ref<{ bocRate: string; publishTime: string; spotBuy: string } | null>(null)
+const rateLoading = ref(false)
+
+async function fetchRate(currency: string): Promise<void> {
+  const name = currencyNames[currency]
+  if (!name) return
+  rateLoading.value = true
+  try {
+    const rows = await getBocRates(name)
+    if (rows.length) {
+      rateInfo.value = { bocRate: rows[0].bocRate, publishTime: rows[0].publishTime, spotBuy: rows[0].spotBuy }
+      form.exchangeRate = Number(rows[0].bocRate)
+      form.ratePublishTime = rows[0].publishTime
+      deriveFromForeign()
+    }
+  } finally {
+    rateLoading.value = false
+  }
+}
+
+function deriveFromForeign(): void {
+  if (!isFx.value || !form.foreignAmount || !form.exchangeRate) return
+  form.amount = Math.round((form.foreignAmount / 100) * form.exchangeRate * 100) / 100
+}
+
+function onForeignChange(): void {
+  deriveFromForeign()
+}
+
+watch(() => form.currency, async (c: string | undefined) => {
+  if (c && c !== '人民币') {
+    rateInfo.value = null
+    await fetchRate(c)
+  } else {
+    rateInfo.value = null
+  }
+})
 
 function onBizTypeChange(): void {
   // 业务类型决定合同类型（=项目类型）
@@ -123,6 +167,10 @@ function openCreate(): void {
     projectId: undefined,
     name: '',
     contractType: '审计',
+    currency: '人民币',
+    foreignAmount: undefined,
+    exchangeRate: undefined,
+    ratePublishTime: undefined,
     amount: 0,
     signDate: '',
     serviceStart: '',
@@ -143,6 +191,10 @@ function openEdit(row: ContractItem): void {
     projectId: row.projectId,
     name: row.name,
     contractType: row.contractType,
+    currency: row.currency || '人民币',
+    foreignAmount: row.foreignAmount,
+    exchangeRate: row.exchangeRate,
+    ratePublishTime: row.ratePublishTime || '',
     amount: row.amount,
     signDate: row.signDate,
     serviceStart: row.serviceStart || '',
@@ -157,11 +209,14 @@ function openEdit(row: ContractItem): void {
 async function handleSave(): Promise<void> {
   saving.value = true
   try {
-    // 服务期间未填的字段归一化为 undefined(未约定期间)
+    // 服务期间未填的字段归一化为 undefined(未约定期间);非外币时清空外币字段
     const payload = {
       ...form,
       serviceStart: form.serviceStart || undefined,
       serviceEnd: form.serviceEnd || undefined,
+      foreignAmount: isFx.value ? form.foreignAmount : undefined,
+      exchangeRate: isFx.value ? form.exchangeRate : undefined,
+      ratePublishTime: isFx.value ? form.ratePublishTime : undefined,
     }
     if (isEdit.value) {
       await updateContract(payload)
@@ -301,6 +356,12 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
         <el-table-column label="业务类型" min-width="130" show-overflow-tooltip>
           <template #default="{ row }">{{ row.bizType || row.contractType }}</template>
         </el-table-column>
+        <el-table-column prop="currency" label="币种" width="80" align="center">
+          <template #default="{ row }">
+            <span v-if="row.currency && row.currency !== '人民币'" style="color: #e6a23c">{{ row.currency }}</span>
+            <span v-else style="color: #9ca3af">人民币</span>
+          </template>
+        </el-table-column>
         <el-table-column label="金额（元）" min-width="120" align="right">
           <template #default="{ row }">{{ Number(row.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</template>
         </el-table-column>
@@ -371,13 +432,35 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
             <div class="field-tip">合同类型随业务类型带出（{{ form.contractType || '未选择' }}）；字号按业务类型的字号类型自动编号，流水按字号+年份独立递增</div>
           </div>
         </el-form-item>
+        <el-form-item label="币种">
+          <el-select v-model="form.currency" :disabled="isEdit" style="width: 100%">
+            <el-option v-for="c in currencies" :key="c" :label="c" :value="c" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="isFx" label="外币金额" required>
+          <div style="width: 100%; display: flex; gap: 8px; align-items: center">
+            <el-input-number v-model="form.foreignAmount" :min="0.01" :precision="2" :step="1000" style="flex: 1" @change="onForeignChange" />
+            <span style="flex-shrink: 0; color: #6b7280; font-size: 13px">{{ form.currency }}</span>
+          </div>
+        </el-form-item>
+        <el-form-item v-if="isFx" label="汇率牌价">
+          <div style="width: 100%">
+            <div style="display: flex; gap: 8px; align-items: center">
+              <el-input-number v-model="form.exchangeRate" :min="0.0001" :precision="4" :step="0.01" style="flex: 1" />
+              <el-button size="small" :loading="rateLoading" @click="fetchRate(form.currency!)">刷新牌价</el-button>
+            </div>
+            <div v-if="rateInfo" class="field-tip">
+              中国银行牌价（{{ rateInfo.publishTime }}）：每 100{{ form.currency }} 中行折算价 {{ rateInfo.bocRate }} 元，现汇买入 {{ rateInfo.spotBuy }} 元
+            </div>
+          </div>
+        </el-form-item>
         <el-form-item label="合同金额（元）" required>
-          <el-input-number v-model="form.amount" :min="0" :precision="2" :step="1000" style="width: 100%" />
+          <el-input-number v-model="form.amount" :min="0.01" :precision="2" :step="1000" style="width: 100%" @change="deriveFromForeign" />
         </el-form-item>
         <el-form-item label="签约日期" required>
           <el-date-picker v-model="form.signDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="服务期限" required>
+        <el-form-item label="服务期限">
           <el-date-picker v-model="form.serviceStart" type="date" value-format="YYYY-MM-DD" placeholder="开始日期" style="width: 48%" />
           <span style="margin: 0 4px">至</span>
           <el-date-picker v-model="form.serviceEnd" type="date" value-format="YYYY-MM-DD" placeholder="结束日期" style="width: 48%" />

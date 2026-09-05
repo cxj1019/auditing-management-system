@@ -67,6 +67,58 @@ public class ExchangeRateService {
         }
     }
 
+    /**
+     * 历史人民币汇率中间价（中国外汇交易中心公开数据）。
+     * <p>返回 货币对 → 中间价，如 USD/CNY → 6.7808（1 外币兑人民币）。
+     * 当日请使用 {@link #currentRates()}（中国银行牌价）。</p>
+     */
+    public List<Map<String, String>> historyParity(LocalDate date) {
+        String day = date.toString();
+        String url = "https://www.chinamoney.com.cn/ags/ms/cm-u-bk-ccpr/CcprHisNew?startDate="
+                + day + "&endDate=" + day + "&pageNum=1&pageSize=10";
+        try {
+            HttpClient client = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("User-Agent", "Mozilla/5.0")
+                    .header("Referer", "https://www.chinamoney.com.cn/chinese/bkccpr/")
+                    .timeout(TIMEOUT)
+                    .GET()
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            com.google.gson.JsonObject root = com.google.gson.JsonParser
+                    .parseString(response.body()).getAsJsonObject();
+            var data = root.getAsJsonObject("data");
+            var head = data.getAsJsonArray("head");
+            var records = root.getAsJsonArray("records");
+            List<Map<String, String>> rows = new ArrayList<>();
+            for (var rec : records) {
+                var obj = rec.getAsJsonObject();
+                String d = obj.get("date").getAsString();
+                var values = obj.getAsJsonArray("values");
+                for (int i = 0; i < head.size(); i++) {
+                    String pair = head.get(i).getAsString();
+                    String base = pair.split("/")[0];
+                    Map<String, String> row = new java.util.HashMap<>();
+                    row.put("currencyName", base);
+                    row.put("pair", pair);
+                    row.put("rate", values.get(i).getAsString());
+                    row.put("date", d);
+                    rows.add(row);
+                }
+            }
+            if (rows.isEmpty()) {
+                throw new BusinessException("该日期无中间价数据（可能为非交易日），请更换日期");
+            }
+            return rows;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("[汇率] 中间价历史查询失败({}): {}", day, e.getMessage());
+            throw new BusinessException("获取历史汇率失败，请稍后重试");
+        }
+    }
+
     /** 按货币名称取牌价行（如 美元/日元/欧元） */
     public RateRow findByName(String currencyName) {
         for (RateRow row : currentRates()) {

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { login as loginApi, logout as logoutApi, getUserInfo as getUserInfoApi } from '@/api/auth'
 import { getToken, setToken, removeToken } from '@/utils/auth'
 import type { LoginRequest, LoginResponse, MenuItem } from '@/types'
@@ -12,6 +12,7 @@ export const useUserStore = defineStore('user', () => {
   const nickname = ref('')
   const menus = ref<MenuItem[]>([])
   const permissions = ref<string[]>([])
+  const deptId = ref<number | null>(null)
   const roles = ref<string[]>([])
   /** 是否已加载用户信息（用于路由守卫判断） */
   const infoLoaded = ref(false)
@@ -51,6 +52,7 @@ export const useUserStore = defineStore('user', () => {
     nickname.value = ''
     menus.value = []
     permissions.value = []
+    deptId.value = null
     roles.value = []
     infoLoaded.value = false
     removeToken()
@@ -72,6 +74,7 @@ export const useUserStore = defineStore('user', () => {
     nickname.value = data.nickname || data.username
     menus.value = data.menus || []
     permissions.value = data.permissions || []
+    deptId.value = data.deptId ?? null
     roles.value = data.roles || []
     infoLoaded.value = true
   }
@@ -83,6 +86,8 @@ export const useUserStore = defineStore('user', () => {
     nickname,
     menus,
     permissions,
+    deptId,
+    isAdmin: computed(() => roles.value.includes('admin')),
     roles,
     hasRole,
     infoLoaded,

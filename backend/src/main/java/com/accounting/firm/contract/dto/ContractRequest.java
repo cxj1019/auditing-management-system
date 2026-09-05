@@ -39,6 +39,22 @@ public class ContractRequest {
     @NotNull(message = "合同金额不能为空")
     private BigDecimal amount;
 
+    /** 币种（境外客户可选外币，默认人民币） */
+    @Size(max = 10, message = "币种长度不能超过 10")
+    private String currency;
+
+    /** 外币金额 */
+    @Positive(message = "外币金额必须大于 0")
+    private BigDecimal foreignAmount;
+
+    /** 中国银行牌价（每 100 外币兑人民币） */
+    @Positive(message = "汇率必须大于 0")
+    private BigDecimal exchangeRate;
+
+    /** 牌价发布时间 */
+    @Size(max = 40, message = "牌价发布时间长度不能超过 40")
+    private String ratePublishTime;
+
     @NotNull(message = "签约日期不能为空")
     private LocalDate signDate;
 

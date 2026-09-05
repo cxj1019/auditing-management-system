@@ -37,6 +37,17 @@ public class ContractVO {
     private String bizType;
 
     private BigDecimal amount;
+    /** 币种 */
+    private String currency;
+
+    /** 外币金额 */
+    private BigDecimal foreignAmount;
+
+    /** 中国银行牌价（每 100 外币兑人民币） */
+    private BigDecimal exchangeRate;
+
+    /** 牌价发布时间 */
+    private String ratePublishTime;
 
     private LocalDate signDate;
 
@@ -62,6 +73,10 @@ public class ContractVO {
         vo.setContractType(c.getContractType());
         vo.setBizType(c.getBizType());
         vo.setAmount(c.getAmount());
+        vo.setCurrency(c.getCurrency());
+        vo.setForeignAmount(c.getForeignAmount());
+        vo.setExchangeRate(c.getExchangeRate());
+        vo.setRatePublishTime(c.getRatePublishTime());
         vo.setSignDate(c.getSignDate());
         vo.setServiceStart(c.getServiceStart());
         vo.setServiceEnd(c.getServiceEnd());

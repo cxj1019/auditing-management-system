@@ -52,6 +52,12 @@ const moduleRoutes: RouteRecordRaw[] = [
         meta: { title: '报销管理', perm: 'business:reimbursement:list' },
       },
       {
+        path: 'fx',
+        name: 'BusinessFx',
+        component: () => import('@/views/business/fx/index.vue'),
+        meta: { title: '汇率牌价', perm: 'business:fx:list' },
+      },
+      {
         path: 'confirmation',
         name: 'BusinessConfirmation',
         component: () => import('@/views/business/confirmation/index.vue'),

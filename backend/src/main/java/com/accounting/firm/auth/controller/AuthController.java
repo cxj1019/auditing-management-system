@@ -75,6 +75,7 @@ public class AuthController {
                 .userId(user.getUserId())
                 .username(user.getUsername())
                 .nickname(user.getNickname())
+                .deptId(user.getDeptId())
                 .menus(menuTree)
                 .permissions(List.copyOf(user.getPermissions()))
                 .roles(List.copyOf(user.getRoles()))

@@ -25,6 +25,9 @@ public class LoginResponse {
     /** 姓名/昵称 */
     private String nickname;
 
+    /** 部门 ID（管理员为 null） */
+    private Long deptId;
+
     /** 菜单树（目录/菜单，不含按钮） */
     private List<SysMenu> menus;
 

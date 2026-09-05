@@ -46,6 +46,7 @@ export interface LoginResponse {
   menus: MenuItem[]
   permissions: string[]
   roles?: string[]
+  deptId?: number
 }
 
 /** 用户 */
@@ -269,6 +270,9 @@ export interface ContractItem {
   contractType: string
   bizType?: string
   amount: number
+  currency?: string
+  foreignAmount?: number
+  exchangeRate?: number
   signDate: string
   serviceStart?: string
   serviceEnd?: string
@@ -276,6 +280,7 @@ export interface ContractItem {
   status: ContractStatus
   remark?: string
   createTime?: string
+  ratePublishTime?: string
 }
 
 /** 合同创建/编辑请求 */
@@ -291,6 +296,10 @@ export interface ContractRequest {
   serviceEnd?: string
   keeperName: string
   remark?: string
+  currency?: string
+  foreignAmount?: number
+  exchangeRate?: number
+  ratePublishTime?: string
 }
 
 /** 收款记录 */
@@ -708,6 +717,7 @@ export interface ExchangeRateRow {
   cashSell: string
   bocRate: string
   publishTime: string
+  date?: string
 }
 
 /** 项目工时汇总行 */

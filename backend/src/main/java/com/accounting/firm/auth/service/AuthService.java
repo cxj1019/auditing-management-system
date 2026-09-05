@@ -59,6 +59,7 @@ public class AuthService {
                 .userId(user.getUserId())
                 .username(user.getUsername())
                 .nickname(user.getNickname())
+                .deptId(user.getDeptId())
                 .menus(menuTree)
                 .permissions(permissions)
                 .roles(List.copyOf(user.getRoles()))
