@@ -12,7 +12,9 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: ${DB_POOL_SIZE:5}
+      # Supabase Session Pooler 整项目限 15 连接；3 足够单实例使用，
+      # 并为 Render 部署新旧实例重叠期留出余量（可用 DB_POOL_SIZE 覆盖）
+      maximum-pool-size: ${DB_POOL_SIZE:3}
       connection-timeout: 30000
   flyway:
     enabled: true
