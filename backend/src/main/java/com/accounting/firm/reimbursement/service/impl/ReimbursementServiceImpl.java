@@ -358,6 +358,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
             item.setInvoiceType(StringUtils.hasText(ir.getInvoiceType()) ? ir.getInvoiceType() : "none");
             item.setIsVatInvoice(!"none".equals(item.getInvoiceType()));
             item.setTaxRate(ir.getTaxRate());
+            item.setTaxAmount(ir.getTaxAmount());
             item.setProjectId(ir.getProjectId());
             item.setBillable(Boolean.TRUE.equals(ir.getBillable()));
             if (item.getId() == null) {

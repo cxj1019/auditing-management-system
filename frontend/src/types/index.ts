@@ -518,6 +518,10 @@ export interface ReimbursementItemData {
   invoiceType?: string
   /** 税率（%，专票必填） */
   taxRate?: number
+  /** 税额（元，可手填） */
+  taxAmount?: number
+  /** 税额是否手动覆盖（仅前端记忆，不提交） */
+  taxAmountManual?: boolean
   projectId?: number
   billable?: boolean
 }
@@ -593,6 +597,7 @@ export interface ReimbursementExportItem {
   isVatInvoice?: boolean
   invoiceType?: string
   taxRate?: number
+  taxAmount?: number
   statusLabel: string
   approverName?: string
 }

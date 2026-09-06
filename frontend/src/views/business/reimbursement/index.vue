@@ -184,19 +184,38 @@ const projectOptions = ref<ProjectItem[]>([])
 
 function emptyItem(): ReimbursementItemData {
   // 新行默认继承单头"关联项目"，可按行改成其他项目（跨项目费用分摊）
-  return { category: categories.value[0] || '其他', amount: 0, expenseDate: new Date().toISOString().slice(0, 10), description: '', invoiceNumber: '', invoiceType: 'none', taxRate: undefined, projectId: form.projectId ?? undefined, billable: false }
+  return { category: categories.value[0] || '其他', amount: 0, expenseDate: new Date().toISOString().slice(0, 10), description: '', invoiceNumber: '', invoiceType: 'none', taxRate: undefined, taxAmount: undefined, taxAmountManual: false, projectId: form.projectId ?? undefined, billable: false }
 }
 
 function addItem(): void {
   form.items.push(emptyItem())
 }
 
-/** 勾选增值税专用发票：取消勾选时清空税率 */
+/** 勾选增值税专用发票：取消勾选时清空税率与税额 */
 function onSpecialChange(row: ReimbursementItemData, checked: boolean): void {
   row.invoiceType = checked ? 'vat_special' : 'none'
   if (!checked) {
     row.taxRate = undefined
+    row.taxAmount = undefined
+    row.taxAmountManual = false
+  } else {
+    autoTaxAmount(row)
   }
+}
+
+/** 税额 = 金额 ÷(1+税率)×税率；用户手填后该行不再自动重算 */
+function autoTaxAmount(row: ReimbursementItemData): void {
+  if (row.taxAmountManual) return
+  if (row.invoiceType !== 'vat_special' || !row.taxRate || !row.amount) {
+    row.taxAmount = undefined
+    return
+  }
+  row.taxAmount = Math.round((row.amount / (1 + row.taxRate / 100)) * row.taxRate * 100) / 100
+}
+
+function onTaxAmountInput(row: ReimbursementItemData): void {
+  // 手填税额（如机票行程单按票面税额），此后金额/税率变化不再覆盖
+  row.taxAmountManual = row.taxAmount != null
 }
 
 function removeItem(index: number): void {
@@ -284,6 +303,8 @@ async function syncItemIds(billId: number): Promise<void> {
     isVatInvoice: !!i.isVatInvoice,
     invoiceType: i.invoiceType || 'none',
     taxRate: i.taxRate ?? undefined,
+    taxAmount: i.taxAmount ?? undefined,
+    taxAmountManual: i.taxAmount != null,
     projectId: i.projectId ?? undefined,
     billable: !!i.billable,
   }))
@@ -402,7 +423,7 @@ const drawerVisible = ref(false)
 const detail = ref<ReimbursementItem | null>(null)
 const detailLoading = ref(false)
 const detailAttachments = ref<ReimbursementAttachmentItem[]>([])
-const detailItems = ref<{ id: number; category: string; amount: number; expenseDate: string; description?: string; invoiceNumber?: string; isVatInvoice?: boolean; invoiceType?: string; taxRate?: number; projectId?: number; billable?: boolean }[]>([])
+const detailItems = ref<{ id: number; category: string; amount: number; expenseDate: string; description?: string; invoiceNumber?: string; isVatInvoice?: boolean; invoiceType?: string; taxRate?: number; taxAmount?: number; projectId?: number; billable?: boolean }[]>([])
 
 function detailItemAtts(itemId?: number): ReimbursementAttachmentItem[] {
   if (!itemId) return []
@@ -493,11 +514,11 @@ async function handleExportExcel(): Promise<void> {
       return
     }
     const aoa = [
-      ['报销编号', '申请人', '项目', '报销标题', '费用类别', '金额（元）', '费用日期', '事由说明', '发票号', '增值税专票', '税率（%）', '单据状态', '审批人'],
+      ['报销编号', '申请人', '项目', '报销标题', '费用类别', '金额（元）', '费用日期', '事由说明', '发票号', '增值税专票', '税率（%）', '税额（元）', '单据状态', '审批人'],
       ...rows.map((r) => [
         r.reimbursementNo, r.applicantName || '', r.projectName || '', r.title,
         r.itemCategory, Number(r.itemAmount), r.itemExpenseDate, r.itemDescription || '',
-        r.invoiceNumber || '', r.invoiceType === 'vat_special' ? '是' : '否', r.taxRate ?? '', r.statusLabel, r.approverName || '',
+        r.invoiceNumber || '', r.invoiceType === 'vat_special' ? '是' : '否', r.taxRate ?? '', r.taxAmount ?? '', r.statusLabel, r.approverName || '',
       ]),
     ]
     const ws = XLSX.utils.aoa_to_sheet(aoa)
@@ -699,10 +720,21 @@ function makeDetailRowUploader(itemId: number) {
                 @update:model-value="(v: boolean) => onSpecialChange(row, v)" />
             </template>
           </el-table-column>
-          <el-table-column label="税率（%）" width="110" align="right">
+          <el-table-column label="税率（%）" width="100" align="right">
             <template #default="{ row }">
               <el-input-number v-model="row.taxRate" size="small" :min="0" :max="100" :precision="2" :step="1"
-                :disabled="row.invoiceType !== 'vat_special'" style="width: 100%" />
+                :disabled="row.invoiceType !== 'vat_special'" style="width: 100%" @change="autoTaxAmount(row)" />
+            </template>
+          </el-table-column>
+          <el-table-column width="110" align="right">
+            <template #header>
+              <el-tooltip content="默认按税率自动计算，可手填覆盖（如机票按票面税额）" placement="top">
+                <span>税额（元）</span>
+              </el-tooltip>
+            </template>
+            <template #default="{ row }">
+              <el-input-number v-model="row.taxAmount" size="small" :min="0" :precision="2" :step="1"
+                :disabled="row.invoiceType !== 'vat_special'" style="width: 100%" @change="onTaxAmountInput(row)" />
             </template>
           </el-table-column>
           <el-table-column width="100" align="center">
@@ -853,6 +885,9 @@ function makeDetailRowUploader(itemId: number) {
             </el-table-column>
             <el-table-column label="税率" width="70" align="center">
               <template #default="{ row }">{{ row.taxRate != null ? row.taxRate + '%' : '—' }}</template>
+            </el-table-column>
+            <el-table-column label="税额" width="80" align="right">
+              <template #default="{ row }">{{ row.taxAmount != null ? money(row.taxAmount) : '—' }}</template>
             </el-table-column>
             <el-table-column label="归集项目" min-width="140" show-overflow-tooltip>
               <template #default="{ row }">

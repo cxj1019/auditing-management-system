@@ -34,6 +34,8 @@ public class ReimbursementExportVO {
     private String invoiceType;
     /** 税率（%） */
     private java.math.BigDecimal taxRate;
+    /** 税额（元） */
+    private java.math.BigDecimal taxAmount;
     /** 明细行归集项目（行项目优先，单头兜底） */
     private Long itemProjectId;
 

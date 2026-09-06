@@ -45,6 +45,9 @@ public class ReimbursementItemRequest {
     /** 税率（%，增值税专用发票必填） */
     private BigDecimal taxRate;
 
+    /** 税额（元，可手填；为空时按税率推算） */
+    private BigDecimal taxAmount;
+
     /** 归集项目 ID（可空；未填按单头项目归集） */
     private Long projectId;
 

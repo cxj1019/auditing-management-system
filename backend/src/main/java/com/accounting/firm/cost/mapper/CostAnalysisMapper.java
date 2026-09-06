@@ -34,7 +34,7 @@ public interface CostAnalysisMapper {
                        GROUP BY c.project_id) rev ON rev.project_id = p.id
             LEFT JOIN (SELECT COALESCE(i.project_id, r.project_id) AS project_id,
                               SUM(CASE WHEN i.invoice_type = 'vat_special' AND i.tax_rate IS NOT NULL
-                                       THEN i.amount / (1 + i.tax_rate / 100)
+                                       THEN i.amount - COALESCE(i.tax_amount, i.amount * i.tax_rate / (100 + i.tax_rate))
                                        ELSE i.amount END) AS expense
                        FROM reimbursement_item i
                        JOIN reimbursement r ON r.id = i.reimbursement_id

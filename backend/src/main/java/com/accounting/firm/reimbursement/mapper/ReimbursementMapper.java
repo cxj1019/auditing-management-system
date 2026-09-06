@@ -21,7 +21,7 @@ public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
                    i.category AS item_category, i.amount AS item_amount,
                    i.expense_date AS item_expense_date, i.description AS item_description,
                    i.invoice_number, i.is_vat_invoice,
-                   i.invoice_type, i.tax_rate,
+                   i.invoice_type, i.tax_rate, i.tax_amount,
                    COALESCE(i.project_id, r.project_id) AS item_project_id,
                    CASE r.status
                        WHEN 0 THEN '草稿' WHEN 1 THEN '待审批' WHEN 2 THEN '已批准'
