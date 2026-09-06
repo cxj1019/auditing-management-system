@@ -89,6 +89,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
     @Transactional(rollbackFor = Exception.class)
     public Long createDraft(ReimbursementRequest request, SecurityUser currentUser) {
         requireValidProject(request.getProjectId());
+        requireValidItemsProjects(request.getItems());
         Reimbursement bill = new Reimbursement();
         bill.setReimbursementNo(generateNo());
         bill.setApplicantId(currentUser.getUserId());
@@ -114,6 +115,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         lastRemovedItemIds.clear();
         Reimbursement bill = requireEditable(id, currentUser);
         requireValidProject(request.getProjectId());
+        requireValidItemsProjects(request.getItems());
         bill.setTitle(request.getTitle());
         bill.setProjectId(request.getProjectId());
         updateById(bill);
@@ -303,6 +305,18 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         }
     }
 
+    /** 校验明细行的归集项目：存在且未归档（可空，行项目优先于单头项目归集成本） */
+    private void requireValidItemsProjects(List<ReimbursementItemRequest> items) {
+        if (items == null) {
+            return;
+        }
+        for (ReimbursementItemRequest item : items) {
+            if (item.getProjectId() != null) {
+                requireValidProject(item.getProjectId());
+            }
+        }
+    }
+
     /** 增量同步明细行：已保存行按 ID 更新、新行插入、缺失行删除；返回被移除的行 ID */
     private List<Long> replaceItems(Long reimbursementId, List<ReimbursementItemRequest> items) {
         List<Long> removedIds = new java.util.ArrayList<>();
@@ -333,6 +347,8 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
             item.setDescription(ir.getDescription());
             item.setInvoiceNumber(ir.getInvoiceNumber());
             item.setIsVatInvoice(Boolean.TRUE.equals(ir.getIsVatInvoice()));
+            item.setProjectId(ir.getProjectId());
+            item.setBillable(Boolean.TRUE.equals(ir.getBillable()));
             if (item.getId() == null) {
                 itemMapper.insert(item);
             } else {

@@ -514,6 +514,8 @@ export interface ReimbursementItemData {
   description?: string
   invoiceNumber?: string
   isVatInvoice?: boolean
+  projectId?: number
+  billable?: boolean
 }
 
 /** 报销单 */

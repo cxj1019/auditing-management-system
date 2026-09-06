@@ -38,4 +38,10 @@ public class ReimbursementItemRequest {
 
     /** 是否增值税发票 */
     private Boolean isVatInvoice = false;
+
+    /** 归集项目 ID（可空；未填按单头项目归集） */
+    private Long projectId;
+
+    /** 是否可向客户收取（垫付性质费用） */
+    private Boolean billable = false;
 }

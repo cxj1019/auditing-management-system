@@ -109,7 +109,8 @@ const form = reactive<ReimbursementRequest>({
 const projectOptions = ref<ProjectItem[]>([])
 
 function emptyItem(): ReimbursementItemData {
-  return { category: '差旅费', amount: 0, expenseDate: new Date().toISOString().slice(0, 10), description: '', invoiceNumber: '', isVatInvoice: false }
+  // 新行默认继承单头"关联项目"，可按行改成其他项目（跨项目费用分摊）
+  return { category: '差旅费', amount: 0, expenseDate: new Date().toISOString().slice(0, 10), description: '', invoiceNumber: '', isVatInvoice: false, projectId: form.projectId ?? undefined, billable: false }
 }
 
 function addItem(): void {
@@ -123,10 +124,20 @@ function removeItem(index: number): void {
 const currentBillId = computed(() => editingId.value || detail.value?.id || 0)
 
 const itemsTotal = computed(() => form.items.reduce((sum, i) => sum + Number(i.amount || 0), 0))
+/** 可向客户收取（垫付）的费用合计 */
+const billableTotal = computed(() => form.items
+  .filter((i) => i.billable)
+  .reduce((sum, i) => sum + Number(i.amount || 0), 0))
 
 async function loadProjectOptions(): Promise<void> {
-  // 专用选项接口：全部非归档项目、不做部门隔离，报销可归集到任何在做的项目
+  // 专用选项接口：非归档项目、按归属部门隔离
   projectOptions.value = await projectOptionsApi()
+}
+
+/** 项目 ID → 展示标签 */
+function projectLabel(projectId: number): string {
+  const p = projectOptions.value.find((x) => x.id === projectId)
+  return p ? `${p.projectNo} | ${p.name}` : `项目#${projectId}`
 }
 
 function openCreate(): void {
@@ -184,6 +195,8 @@ async function syncItemIds(billId: number): Promise<void> {
     description: i.description || '',
     invoiceNumber: i.invoiceNumber || '',
     isVatInvoice: !!i.isVatInvoice,
+    projectId: i.projectId ?? undefined,
+    billable: !!i.billable,
   }))
 }
 // ---------- 行级发票附件 ----------
@@ -300,7 +313,7 @@ const drawerVisible = ref(false)
 const detail = ref<ReimbursementItem | null>(null)
 const detailLoading = ref(false)
 const detailAttachments = ref<ReimbursementAttachmentItem[]>([])
-const detailItems = ref<{ id: number; category: string; amount: number; expenseDate: string; description?: string; invoiceNumber?: string; isVatInvoice?: boolean }[]>([])
+const detailItems = ref<{ id: number; category: string; amount: number; expenseDate: string; description?: string; invoiceNumber?: string; isVatInvoice?: boolean; projectId?: number; billable?: boolean }[]>([])
 
 function detailItemAtts(itemId?: number): ReimbursementAttachmentItem[] {
   if (!itemId) return []
@@ -544,8 +557,8 @@ function makeDetailRowUploader(itemId: number) {
         <el-form-item label="报销标题" required>
           <el-input v-model="form.title" placeholder="如 8月差旅报销" maxlength="200" />
         </el-form-item>
-        <el-form-item label="关联项目">
-          <el-select v-model="form.projectId" placeholder="选择项目（可选，用于成本归集）" filterable clearable style="width: 100%">
+        <el-form-item label="默认项目">
+          <el-select v-model="form.projectId" placeholder="选择项目（可选；明细行可单独指定其他项目）" filterable clearable style="width: 100%">
             <el-option v-for="p in projectOptions" :key="p.id" :label="`${p.projectNo} | ${p.name}`" :value="p.id" />
           </el-select>
         </el-form-item>
@@ -590,6 +603,23 @@ function makeDetailRowUploader(itemId: number) {
               <el-checkbox v-model="row.isVatInvoice" />
             </template>
           </el-table-column>
+          <el-table-column width="100" align="center">
+            <template #header>
+              <el-tooltip content="垫付性质费用，可向客户收取" placement="top">
+                <span>可向客户收</span>
+              </el-tooltip>
+            </template>
+            <template #default="{ row }">
+              <el-checkbox v-model="row.billable" />
+            </template>
+          </el-table-column>
+          <el-table-column label="归集项目" min-width="180">
+            <template #default="{ row }">
+              <el-select v-model="row.projectId" size="small" clearable filterable placeholder="默认随单头项目" style="width: 100%">
+                <el-option v-for="p in projectOptions" :key="p.id" :label="`${p.projectNo} | ${p.name}`" :value="p.id" />
+              </el-select>
+            </template>
+          </el-table-column>
         <el-table-column label="发票" width="90" align="center">
           <template #default="{ row }">
             <el-button v-if="row.id" link type="primary" size="small" @click="openRowAtt(row)">
@@ -606,7 +636,10 @@ function makeDetailRowUploader(itemId: number) {
             </template>
           </el-table-column>
         </el-table>
-        <div class="items-total">合计：<b>{{ itemsTotal.toFixed(2) }}</b> 元</div>
+        <div class="items-total">
+          合计：<b>{{ itemsTotal.toFixed(2) }}</b> 元
+          <span v-if="billableTotal > 0" style="margin-left: 16px; color: #e6a23c">其中可向客户收取：<b>{{ billableTotal.toFixed(2) }}</b> 元</span>
+        </div>
       </div>
 
       <template #footer>
@@ -715,6 +748,18 @@ function makeDetailRowUploader(itemId: number) {
             <el-table-column prop="invoiceNumber" label="发票号" width="100" />
             <el-table-column label="增值税" width="70" align="center">
               <template #default="{ row }">{{ row.isVatInvoice ? '是' : '否' }}</template>
+            </el-table-column>
+            <el-table-column label="归集项目" min-width="140" show-overflow-tooltip>
+              <template #default="{ row }">
+                <template v-if="row.projectId">{{ projectLabel(row.projectId) }}</template>
+                <span v-else style="color: #9ca3af">随单头</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="可向客户收" width="90" align="center">
+              <template #default="{ row }">
+                <el-tag v-if="row.billable" type="warning" size="small">垫付</el-tag>
+                <span v-else style="color: #9ca3af">—</span>
+              </template>
             </el-table-column>
             <el-table-column label="发票附件" min-width="200">
               <template #default="{ row }">

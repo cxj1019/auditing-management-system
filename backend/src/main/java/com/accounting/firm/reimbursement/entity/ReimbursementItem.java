@@ -44,5 +44,11 @@ public class ReimbursementItem implements Serializable {
     /** 是否增值税发票 */
     private Boolean isVatInvoice;
 
+    /** 归集项目 ID（可空；未填时按单头 project_id 归集成本） */
+    private Long projectId;
+
+    /** 是否可向客户收取（垫付性质费用） */
+    private Boolean billable;
+
     private LocalDateTime createTime;
 }

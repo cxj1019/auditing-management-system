@@ -27,9 +27,11 @@ public interface CostAnalysisMapper {
                        FROM contract_payment cp
                        JOIN contract c ON c.id = cp.contract_id
                        GROUP BY c.project_id) rev ON rev.project_id = p.id
-            LEFT JOIN (SELECT project_id, SUM(total_amount) AS expense
-                       FROM reimbursement WHERE status = 1 AND project_id IS NOT NULL
-                       GROUP BY project_id) exp ON exp.project_id = p.id
+            LEFT JOIN (SELECT COALESCE(i.project_id, r.project_id) AS project_id, SUM(i.amount) AS expense
+                       FROM reimbursement_item i
+                       JOIN reimbursement r ON r.id = i.reimbursement_id
+                       WHERE r.status = 1 AND COALESCE(i.project_id, r.project_id) IS NOT NULL
+                       GROUP BY COALESCE(i.project_id, r.project_id)) exp ON exp.project_id = p.id
             LEFT JOIN (SELECT project_id, SUM(amount) AS labor
                        FROM labor_cost GROUP BY project_id) l ON l.project_id = p.id
             <where>
