@@ -22,7 +22,7 @@ public interface InvoiceMapper extends BaseMapper<Invoice> {
             SELECT i.id, i.invoice_no, i.contract_id, i.client_id, i.type, i.amount, i.tax_rate,
                    i.amount_ex_tax, i.tax_amount, i.currency, i.foreign_amount, i.exchange_rate, i.rate_publish_time,
                    i.invoice_item, i.tax_code, i.tax_class,
-                   i.invoice_date, i.status, i.remark, i.create_time,
+                   i.invoice_date, i.status, i.is_recharge, i.remark, i.create_time,
                    c.contract_no, c.name AS contract_name,
                    p.project_no, p.name AS project_name,
                    cl.client_name,

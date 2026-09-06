@@ -85,4 +85,7 @@ public class InvoiceRequest {
 
     @Size(max = 500, message = "备注长度不能超过 500")
     private String remark;
+
+    /** 垫付开票：向客户收取的代垫费用 */
+    private Boolean isRecharge;
 }

@@ -1,5 +1,6 @@
 import request from './request'
 import type {
+  InvoiceAgingItem,
   InvoiceAttachmentItem,
   InvoiceItem,
   InvoiceOptionItem,
@@ -85,4 +86,10 @@ export function getInvoiceAttPreviewUrl(invoiceId: number, attachmentId: number)
 /** 删除发票附件 */
 export function deleteInvoiceAttachment(invoiceId: number, attachmentId: number): Promise<void> {
   return request.delete(`/invoices/${invoiceId}/attachments/${attachmentId}`)
+}
+
+
+/** 应收账龄：已开票未全额回款的发票 */
+export function getInvoiceAging(): Promise<InvoiceAgingItem[]> {
+  return request.get('/invoices/aging')
 }

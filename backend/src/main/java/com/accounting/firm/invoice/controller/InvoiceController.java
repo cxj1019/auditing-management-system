@@ -60,6 +60,13 @@ public class InvoiceController {
         return ApiResult.success(invoiceService.options(keyword));
     }
 
+    /** 应收账龄：已开票未全额回款的发票，按账龄排序 */
+    @PreAuthorize("hasAuthority('business:invoice:list')")
+    @GetMapping("/aging")
+    public ApiResult<List<com.accounting.firm.invoice.dto.InvoiceAgingVO>> aging() {
+        return ApiResult.success(invoiceService.aging());
+    }
+
     /** 登记发票 */
     @AuditLog("登记发票")
     @PreAuthorize("hasAuthority('business:invoice:add')")

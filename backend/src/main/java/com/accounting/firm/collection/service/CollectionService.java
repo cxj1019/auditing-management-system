@@ -33,4 +33,7 @@ public interface CollectionService extends IService<ContractPayment> {
 
     /** 按合同维度汇总收款（含未收余额与进度） */
     List<CollectionSummaryVO> summary(String keyword);
+
+    /** 垫付台账：按项目归集 可向客户收取费用 → 垫付开票 → 收回 的闭环 */
+    java.util.List<com.accounting.firm.collection.dto.RechargeLedgerVO> rechargeLedger();
 }

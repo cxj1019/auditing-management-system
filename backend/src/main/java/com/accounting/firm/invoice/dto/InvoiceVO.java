@@ -68,6 +68,9 @@ public class InvoiceVO {
     /** 0-待开票 1-已开票 2-已作废 */
     private Integer status;
 
+    /** 垫付开票：向客户收取的代垫费用 */
+    private Boolean isRecharge;
+
     /** 发票品名（按业务类型字典自动带出） */
     private String invoiceItem;
 

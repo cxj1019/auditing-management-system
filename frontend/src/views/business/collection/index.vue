@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   pagePayments,
@@ -10,9 +10,11 @@ import {
   writeOffPayment,
 } from '@/api/collection'
 import { getInvoiceOptions, getInvoiceSummary } from '@/api/invoice'
+import { getRechargeLedger } from '@/api/collection'
 import { pageContracts } from '@/api/contract'
 import type {
   CollectionSummaryItem,
+  RechargeLedgerItem,
   ContractItem,
   InvoiceOptionItem,
   InvoiceSummaryItem,
@@ -22,6 +24,9 @@ import type {
 
 const paymentMethods = ['转账', '现金', '支票', '其他']
 const activeTab = ref('records')
+watch(activeTab, (tab) => {
+  if (tab === 'recharge' && !rechargeRows.value.length) fetchRechargeLedger()
+})
 
 function money(v?: number): string {
   if (v === undefined || v === null) return '—'
@@ -228,6 +233,28 @@ async function fetchInvoiceSummary(): Promise<void> {
   }
 }
 
+// ---------- 垫付台账 ----------
+const rechargeLoading = ref(false)
+const rechargeRows = ref<RechargeLedgerItem[]>([])
+
+async function fetchRechargeLedger(): Promise<void> {
+  rechargeLoading.value = true
+  try {
+    rechargeRows.value = await getRechargeLedger()
+  } finally { rechargeLoading.value = false }
+}
+
+const rechargeStatusLabels: Record<string, string> = {
+  'pending-invoice': '待开票',
+  'pending-collect': '待收回',
+  settled: '已结清',
+}
+const rechargeStatusTypes: Record<string, 'warning' | 'danger' | 'success'> = {
+  'pending-invoice': 'warning',
+  'pending-collect': 'danger',
+  settled: 'success',
+}
+
 // ---------- 合同收款汇总 ----------
 const summaryLoading = ref(false)
 const summaryRows = ref<CollectionSummaryItem[]>([])
@@ -387,6 +414,44 @@ onMounted(() => {
               <template #default="{ row }">
                 <el-progress :percentage="Math.min(row.progressPercent, 100)" :color="progressColor(row.progressPercent)" />
                 <span class="progress-text">{{ row.progressPercent }}%</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <!-- 垫付台账 -->
+        <el-tab-pane label="垫付台账" name="recharge">
+          <div class="table-toolbar">
+            <span class="summary-title">可向客户收取费用闭环：垫付（报销）→ 垫付开票 → 收回（按项目归集）</span>
+            <el-button type="primary" plain @click="fetchRechargeLedger">刷新</el-button>
+          </div>
+          <el-table v-loading="rechargeLoading" :data="rechargeRows" border stripe>
+            <el-table-column label="项目" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.projectNo ? `${row.projectNo} ${row.projectName}` : '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="clientName" label="客户" min-width="130" show-overflow-tooltip />
+            <el-table-column label="垫付合计（元）" min-width="120" align="right">
+              <template #default="{ row }">{{ money(row.rechargeTotal) }}</template>
+            </el-table-column>
+            <el-table-column label="已开票（元）" min-width="120" align="right">
+              <template #default="{ row }">{{ money(row.invoicedTotal) }}</template>
+            </el-table-column>
+            <el-table-column label="待开票（元）" min-width="120" align="right">
+              <template #default="{ row }">
+                <span :style="{ color: Number(row.pendingInvoice) > 0 ? '#e6a23c' : '#67c23a' }">{{ money(row.pendingInvoice) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="已收回（元）" min-width="120" align="right">
+              <template #default="{ row }">{{ money(row.collectedTotal) }}</template>
+            </el-table-column>
+            <el-table-column label="待收回（元）" min-width="120" align="right">
+              <template #default="{ row }">
+                <span :style="{ color: Number(row.pendingCollect) > 0 ? '#f56c6c' : '#67c23a' }">{{ money(row.pendingCollect) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="90" align="center">
+              <template #default="{ row }">
+                <el-tag :type="rechargeStatusTypes[row.status] || 'info'" size="small">{{ rechargeStatusLabels[row.status] || row.status }}</el-tag>
               </template>
             </el-table-column>
           </el-table>

@@ -109,6 +109,16 @@ public class CollectionServiceImpl extends ServiceImpl<ContractPaymentMapper, Co
         return rows;
     }
 
+    @Override
+    public List<com.accounting.firm.collection.dto.RechargeLedgerVO> rechargeLedger() {
+        var scope = dataScopeService.currentScope();
+        List<com.accounting.firm.collection.dto.RechargeLedgerVO> rows = baseMapper.selectRechargeLedger(
+                scope.type() == DataScopeService.ScopeType.DEPT ? scope.deptId() : null,
+                scope.type() == DataScopeService.ScopeType.SELF ? scope.username() : null);
+        rows.forEach(com.accounting.firm.collection.dto.RechargeLedgerVO::fillDerived);
+        return rows;
+    }
+
     /** 校验发票存在且已开票 */
     private Invoice requireValidInvoice(Long invoiceId) {
         if (invoiceId == null) {

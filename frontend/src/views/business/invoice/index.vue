@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import {
   pageInvoices,
+  getInvoiceAging,
   createInvoice,
   updateInvoice,
   deleteInvoice,
@@ -18,7 +19,7 @@ import { getContractOptions } from '@/api/contract'
 import { getBocRates } from '@/api/exchangeRate'
 import * as XLSX from 'xlsx'
 import AttachmentLink from '@/components/AttachmentLink.vue'
-import type { ContractOptionItem, InvoiceAttachmentItem, InvoiceItem, InvoiceRequest } from '@/types'
+import type { InvoiceAgingItem,  ContractOptionItem, InvoiceAttachmentItem, InvoiceItem, InvoiceRequest } from '@/types'
 
 const invoiceTypes = ['增值税专用发票', '增值税普通发票']
 const currencyNames: Record<string, string> = {
@@ -68,10 +69,39 @@ const form = reactive<InvoiceRequest>({
   contractId: 0, invoiceNo: '', type: '增值税专用发票',
   amount: 0, taxRate: undefined, amountExTax: undefined, taxAmount: undefined,
   currency: '人民币', foreignAmount: undefined, exchangeRate: undefined, ratePublishTime: undefined,
-  invoiceItem: '', taxCode: '', taxClass: '', invoiceDate: '', remark: '',
+  invoiceItem: '', taxCode: '', taxClass: '', invoiceDate: '', remark: '', isRecharge: false,
 })
 /** 非草稿合同选项（带项目/客户/开票信息） */
 const contractOptions = ref<ContractOptionItem[]>([])
+
+// ---------- 应收账龄 ----------
+const agingVisible = ref(false)
+const agingLoading = ref(false)
+const agingItems = ref<InvoiceAgingItem[]>([])
+
+async function loadAging(): Promise<void> {
+  agingLoading.value = true
+  try {
+    agingItems.value = await getInvoiceAging()
+  } finally { agingLoading.value = false }
+}
+
+const agingBuckets = computed(() => {
+  const order = ['0-30', '31-60', '61-90', '90+']
+  return order.map((key) => {
+    const rows = agingItems.value.filter((r) => r.bucket === key)
+    return {
+      key,
+      count: rows.length,
+      total: rows.reduce((sum, r) => sum + Number(r.outstanding || 0), 0),
+    }
+  })
+})
+
+function openAging(): void {
+  agingVisible.value = true
+  loadAging()
+}
 const selectedContract = computed(() =>
   contractOptions.value.find((c) => c.id === form.contractId))
 
@@ -174,7 +204,7 @@ function openCreate(): void {
   isEdit.value = false
   Object.assign(form, {
     contractId: 0, invoiceNo: '', type: '增值税专用发票',
-    amount: 0, taxRate: undefined, amountExTax: undefined, taxAmount: undefined,
+    amount: 0, taxRate: undefined, amountExTax: undefined, taxAmount: undefined, isRecharge: false,
     currency: '人民币', foreignAmount: undefined, exchangeRate: undefined, ratePublishTime: undefined,
     invoiceItem: '', taxCode: '', taxClass: '', invoiceDate: '', remark: '',
   })
@@ -192,6 +222,7 @@ function openEdit(row: InvoiceItem): void {
     exchangeRate: row.exchangeRate, ratePublishTime: row.ratePublishTime || '',
     invoiceItem: row.invoiceItem || '', taxCode: row.taxCode || '', taxClass: row.taxClass || '',
     invoiceDate: row.invoiceDate || '', remark: row.remark || '',
+    isRecharge: !!row.isRecharge,
   })
   loadContractOptions()
   dialogVisible.value = true
@@ -394,7 +425,8 @@ onMounted(fetchList)
         </div>
         <div>
           <el-button :loading="exporting" @click="handleExportPending">导出待开票清单</el-button>
-          <el-button v-permission="'business:invoice:add'" type="primary" @click="openCreate">登记发票</el-button>
+          <el-button @click="agingVisible = true">应收账龄</el-button>
+        <el-button v-permission="'business:invoice:add'" type="primary" @click="openCreate">登记发票</el-button>
         </div>
       </div>
 
@@ -404,6 +436,11 @@ onMounted(fetchList)
           <template #default="{ row }">
             <span v-if="row.invoiceNo">{{ row.invoiceNo }}</span>
             <span v-else style="color: #9ca3af">待补</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="垫" width="50" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.isRecharge" type="warning" size="small">垫</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="contractNo" label="合同字号" min-width="180" show-overflow-tooltip />
@@ -473,6 +510,9 @@ onMounted(fetchList)
         </el-form-item>
         <el-form-item label="所属项目">
           <el-input :model-value="selectedContract?.projectName" readonly placeholder="选择合同后自动带出" />
+        </el-form-item>
+        <el-form-item label="垫付开票">
+          <el-checkbox v-model="form.isRecharge">向客户收取的代垫费用（计入垫付台账，如差旅）</el-checkbox>
         </el-form-item>
         <el-form-item label="所属客户">
           <el-input :model-value="selectedContract?.clientName" readonly placeholder="选择合同后自动带出" />
@@ -606,11 +646,52 @@ onMounted(fetchList)
         </el-table-column>
       </el-table>
     </el-dialog>
+
+    <!-- 应收账龄 -->
+    <el-dialog v-model="agingVisible" title="应收账龄" width="860px">
+      <div class="aging-cards">
+        <div v-for="b in agingBuckets" :key="b.key" class="aging-card">
+          <div class="aging-bucket">{{ b.key }} 天</div>
+          <div class="aging-count">{{ b.count }} 张</div>
+          <div class="aging-total">{{ b.total.toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }} 元</div>
+        </div>
+      </div>
+      <el-table v-loading="agingLoading" :data="agingItems" border size="small" max-height="380">
+        <el-table-column prop="invoiceNo" label="发票号" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="clientName" label="客户" min-width="130" show-overflow-tooltip />
+        <el-table-column prop="contractNo" label="合同字号" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="invoiceDate" label="开票日期" width="100" />
+        <el-table-column label="账龄" width="90" align="center">
+          <template #default="{ row }">{{ row.agingDays }} 天</template>
+        </el-table-column>
+        <el-table-column label="发票金额" width="110" align="right">
+          <template #default="{ row }">{{ Number(row.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</template>
+        </el-table-column>
+        <el-table-column label="已收" width="110" align="right">
+          <template #default="{ row }">{{ Number(row.collectedAmount).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</template>
+        </el-table-column>
+        <el-table-column label="未收余额" width="110" align="right">
+          <template #default="{ row }">
+            <span style="color: #f56c6c">{{ Number(row.outstanding).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="账龄段" width="80" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.bucket === '90+' ? 'danger' : row.bucket === '61-90' ? 'warning' : 'info'" size="small">{{ row.bucket }}</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
 .toolbar-filters { display: flex; align-items: center; }
+.aging-cards { display: flex; gap: 12px; margin-bottom: 12px; }
+.aging-card { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; text-align: center; }
+.aging-bucket { font-weight: 600; color: #374151; }
+.aging-count { color: #6b7280; font-size: 13px; margin: 4px 0; }
+.aging-total { color: #f56c6c; font-weight: 600; }
 .items-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .section-title { font-size: 14px; font-weight: 500; color: #1f2937; }
 </style>

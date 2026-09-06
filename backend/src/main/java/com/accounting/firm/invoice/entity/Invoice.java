@@ -77,6 +77,9 @@ public class Invoice implements Serializable {
     /** 0-待开票 1-已开票 2-已作废 */
     private Integer status;
 
+    /** 垫付开票：向客户收取的代垫费用（如差旅），用于垫付台账闭环 */
+    private Boolean isRecharge;
+
     private String remark;
 
     @TableField(fill = FieldFill.INSERT)

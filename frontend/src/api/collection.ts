@@ -1,5 +1,5 @@
 import request from './request'
-import type { CollectionSummaryItem, PageResult, PaymentItem, PaymentRequest } from '@/types'
+import type { RechargeLedgerItem, CollectionSummaryItem, PageResult, PaymentItem, PaymentRequest } from '@/types'
 
 /** 分页筛选查询收款记录 */
 export function pagePayments(params: {
@@ -35,4 +35,10 @@ export function writeOffPayment(id: number, invoiceId: number): Promise<void> {
 /** 删除收款 */
 export function deletePayment(id: number): Promise<void> {
   return request.delete(`/payments/${id}`)
+}
+
+
+/** 垫付台账：按项目归集垫付→开票→收回闭环 */
+export function getRechargeLedger(): Promise<RechargeLedgerItem[]> {
+  return request.get('/payments/recharge-ledger')
 }

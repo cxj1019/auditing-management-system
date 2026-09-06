@@ -55,6 +55,13 @@ public class CollectionController {
         return ApiResult.success(collectionService.summary(keyword));
     }
 
+    /** 垫付台账：可向客户收取费用 → 垫付开票 → 收回 的闭环（按项目归集） */
+    @PreAuthorize("hasAnyAuthority('business:collection:list', 'business:invoice:list')")
+    @GetMapping("/recharge-ledger")
+    public ApiResult<List<com.accounting.firm.collection.dto.RechargeLedgerVO>> rechargeLedger() {
+        return ApiResult.success(collectionService.rechargeLedger());
+    }
+
     /** 按发票维度核销汇总（发票金额 vs 已收核销） */
     @PreAuthorize("hasAnyAuthority('business:collection:list', 'business:invoice:list')")
     @GetMapping("/invoice-summary")

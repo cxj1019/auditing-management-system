@@ -40,6 +40,9 @@ public interface InvoiceService extends IService<Invoice> {
     /** 按发票维度核销汇总（发票金额 vs 已收核销，排除已作废） */
     List<InvoiceSummaryVO> summary(String keyword);
 
+    /** 应收账龄：已开票且未全额回款的发票，按账龄天数排序 */
+    List<com.accounting.firm.invoice.dto.InvoiceAgingVO> aging();
+
     /** 上传发票扫描件 */
     InvoiceAttachment uploadAttachment(Long invoiceId, MultipartFile file);
 

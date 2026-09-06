@@ -400,6 +400,7 @@ export interface InvoiceItem {
   taxClass?: string
   invoiceDate?: string
   status: InvoiceStatus
+  isRecharge?: boolean
   remark?: string
   collectedAmount: number
   createTime?: string
@@ -408,6 +409,7 @@ export interface InvoiceItem {
 /** 发票登记/编辑请求 */
 export interface InvoiceRequest {
   id?: number
+  isRecharge?: boolean
   contractId: number
   invoiceNo: string
   type: string
@@ -524,6 +526,35 @@ export interface ReimbursementItemData {
   taxAmountManual?: boolean
   projectId?: number
   billable?: boolean
+}
+
+/** 应收账龄行 */
+export interface InvoiceAgingItem {
+  invoiceId: number
+  invoiceNo?: string
+  clientName?: string
+  contractNo?: string
+  projectName?: string
+  invoiceDate?: string
+  agingDays: number
+  bucket: string
+  amount: number
+  collectedAmount: number
+  outstanding: number
+}
+
+/** 垫付台账行（按项目） */
+export interface RechargeLedgerItem {
+  projectId: number
+  projectNo?: string
+  projectName?: string
+  clientName?: string
+  rechargeTotal: number
+  invoicedTotal: number
+  collectedTotal: number
+  pendingInvoice: number
+  pendingCollect: number
+  status: string
 }
 
 /** 报销费用类别 */

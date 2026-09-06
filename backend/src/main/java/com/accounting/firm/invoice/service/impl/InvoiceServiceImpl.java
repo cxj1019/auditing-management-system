@@ -185,6 +185,41 @@ public class InvoiceServiceImpl extends ServiceImpl<InvoiceMapper, Invoice>
         return rows;
     }
 
+    @Override
+    public List<com.accounting.firm.invoice.dto.InvoiceAgingVO> aging() {
+        var scope = dataScopeService.currentScope();
+        List<InvoiceVO> issued = baseMapper.selectInvoicePage(
+                new Page<>(1, 2000), null, null, InvoiceStatus.ISSUED.getCode(),
+                scope.type() == DataScopeService.ScopeType.DEPT ? scope.deptId() : null,
+                scope.type() == DataScopeService.ScopeType.SELF ? scope.username() : null).getRecords();
+        LocalDate today = LocalDate.now();
+        List<com.accounting.firm.invoice.dto.InvoiceAgingVO> result = new java.util.ArrayList<>();
+        for (InvoiceVO vo : issued) {
+            BigDecimal outstanding = nvl(vo.getAmount()).subtract(nvl(vo.getCollectedAmount()));
+            if (outstanding.signum() <= 0) {
+                continue;
+            }
+            var row = new com.accounting.firm.invoice.dto.InvoiceAgingVO();
+            row.setInvoiceId(vo.getId());
+            row.setInvoiceNo(vo.getInvoiceNo());
+            row.setClientName(vo.getClientName());
+            row.setContractNo(vo.getContractNo());
+            row.setProjectName(vo.getProjectName());
+            row.setInvoiceDate(vo.getInvoiceDate());
+            int days = vo.getInvoiceDate() == null ? 0
+                    : (int) java.time.temporal.ChronoUnit.DAYS.between(vo.getInvoiceDate(), today);
+            row.setAgingDays(days);
+            row.setBucket(days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+");
+            row.setAmount(vo.getAmount());
+            row.setCollectedAmount(vo.getCollectedAmount());
+            row.setOutstanding(outstanding);
+            result.add(row);
+        }
+        result.sort(java.util.Comparator.comparing(
+                com.accounting.firm.invoice.dto.InvoiceAgingVO::getAgingDays).reversed());
+        return result;
+    }
+
     // ---------- 附件（发票扫描件） ----------
 
     @Override
@@ -393,7 +428,12 @@ public class InvoiceServiceImpl extends ServiceImpl<InvoiceMapper, Invoice>
         invoice.setInvoiceItem(request.getInvoiceItem());
         invoice.setTaxCode(request.getTaxCode());
         invoice.setTaxClass(request.getTaxClass());
+        invoice.setIsRecharge(Boolean.TRUE.equals(request.getIsRecharge()));
         invoice.setRemark(request.getRemark());
+    }
+
+    private static BigDecimal nvl(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
     }
 
     private String extractExtension(String fileName) {
