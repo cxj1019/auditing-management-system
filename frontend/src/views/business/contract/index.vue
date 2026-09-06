@@ -136,6 +136,15 @@ function onBizTypeChange(): void {
   }
 }
 
+/** 选择项目后：默认带出项目的业务类型（合同类型随之带出），可手动修改 */
+function onProjectChange(): void {
+  const project = projectOptions.value.find((p) => p.id === form.projectId)
+  if (project?.bizType && form.bizType !== project.bizType) {
+    form.bizType = project.bizType
+    onBizTypeChange()
+  }
+}
+
 // ---------- 列表查询 ----------
 const loading = ref(false)
 const records = ref<ContractItem[]>([])
@@ -472,7 +481,7 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑合同' : '新增合同'" width="640px">
       <el-form :model="form" label-width="100px">
         <el-form-item label="所属项目" required>
-          <el-select v-model="form.projectId" placeholder="选择进行中的项目" filterable style="width: 100%">
+          <el-select v-model="form.projectId" placeholder="选择进行中的项目" filterable style="width: 100%" @change="onProjectChange">
             <el-option
               v-for="p in projectOptions"
               :key="p.id"

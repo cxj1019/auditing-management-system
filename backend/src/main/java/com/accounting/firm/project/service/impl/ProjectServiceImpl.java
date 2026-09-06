@@ -110,6 +110,7 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
             vo.setId(p.getId());
             vo.setProjectNo(p.getProjectNo());
             vo.setName(p.getName());
+            vo.setBizType(p.getBizType());
             vo.setClientName(clientNames.get(p.getClientId()));
             return vo;
         }).toList();

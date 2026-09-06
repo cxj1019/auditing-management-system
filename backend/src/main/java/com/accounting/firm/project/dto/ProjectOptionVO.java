@@ -14,6 +14,9 @@ public class ProjectOptionVO {
 
     private String name;
 
+    /** 业务类型（合同登记时默认带出项目的业务类型） */
+    private String bizType;
+
     /** 客户名称（可空，用于辅助识别） */
     private String clientName;
 }
