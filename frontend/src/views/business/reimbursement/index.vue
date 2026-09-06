@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { listExpenseCategories, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from '@/api/expenseCategory'
 import type { ExpenseCategoryItem, ExpenseCategoryRequest } from '@/types'
+import { restoreQuery, saveQuery } from '@/utils/queryCache'
 import * as XLSX from 'xlsx'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
@@ -39,6 +40,8 @@ import type {
 const userStore = useUserStore()
 // 费用类别字典（系统管理员可在类别设置中增删改）
 const FALLBACK_CATEGORIES = ['差旅费', '交通费', '办公费', '餐饮费', '其他']
+/** 常用税率预设（%），也支持手输自定义税率 */
+const TAX_RATE_PRESETS = [13, 9, 6, 3, 1.5, 0]
 const categories = ref<string[]>([...FALLBACK_CATEGORIES])
 
 async function loadCategories(): Promise<void> {
@@ -134,6 +137,8 @@ const query = reactive({
   status: undefined as ReimbursementStatus | undefined,
   keyword: '',
 })
+restoreQuery('reimbursement', query)
+watch(query, () => saveQuery('reimbursement', query), { deep: true })
 
 async function fetchList(): Promise<void> {
   loading.value = true
@@ -201,6 +206,12 @@ function onSpecialChange(row: ReimbursementItemData, checked: boolean): void {
   } else {
     autoTaxAmount(row)
   }
+}
+
+/** 税率选择：allow-create 产生字符串，统一转数字后重算税额 */
+function onTaxRateSelect(row: ReimbursementItemData, value: unknown): void {
+  row.taxRate = value == null || value === '' ? undefined : Number(value)
+  autoTaxAmount(row)
 }
 
 /** 税额 = 金额 ÷(1+税率)×税率；用户手填后该行不再自动重算 */
@@ -722,8 +733,11 @@ function makeDetailRowUploader(itemId: number) {
           </el-table-column>
           <el-table-column label="税率（%）" width="100" align="right">
             <template #default="{ row }">
-              <el-input-number v-model="row.taxRate" size="small" :min="0" :max="100" :precision="2" :step="1"
-                :disabled="row.invoiceType !== 'vat_special'" style="width: 100%" @change="autoTaxAmount(row)" />
+              <el-select v-model="row.taxRate" size="small" filterable allow-create default-first-option
+                :disabled="row.invoiceType !== 'vat_special'" placeholder="%" style="width: 100%"
+                @change="(v: unknown) => onTaxRateSelect(row, v)">
+                <el-option v-for="r in TAX_RATE_PRESETS" :key="r" :label="r + '%'" :value="r" />
+              </el-select>
             </template>
           </el-table-column>
           <el-table-column width="110" align="right">

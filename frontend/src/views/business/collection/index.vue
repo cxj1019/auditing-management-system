@@ -21,6 +21,7 @@ import type {
   PaymentItem,
   PaymentRequest,
 } from '@/types'
+import { restoreQuery, saveQuery } from '@/utils/queryCache'
 
 const paymentMethods = ['转账', '现金', '支票', '其他']
 const activeTab = ref('records')
@@ -43,6 +44,8 @@ const query = reactive({
   keyword: '',
   dateRange: [] as string[],
 })
+restoreQuery('collection', query)
+watch(query, () => saveQuery('collection', query), { deep: true })
 
 function buildDateParams() {
   return {

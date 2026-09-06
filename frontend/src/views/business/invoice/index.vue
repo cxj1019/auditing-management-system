@@ -20,6 +20,7 @@ import { getBocRates } from '@/api/exchangeRate'
 import * as XLSX from 'xlsx'
 import AttachmentLink from '@/components/AttachmentLink.vue'
 import type { InvoiceAgingItem,  ContractOptionItem, InvoiceAttachmentItem, InvoiceItem, InvoiceRequest } from '@/types'
+import { restoreQuery, saveQuery } from '@/utils/queryCache'
 
 const invoiceTypes = ['增值税专用发票', '增值税普通发票']
 const currencyNames: Record<string, string> = {
@@ -46,6 +47,8 @@ const query = reactive({
   current: 1, size: 10,
   keyword: '', type: '', status: undefined as number | undefined,
 })
+restoreQuery('invoice', query)
+watch(query, () => saveQuery('invoice', query), { deep: true })
 
 async function fetchList(): Promise<void> {
   loading.value = true

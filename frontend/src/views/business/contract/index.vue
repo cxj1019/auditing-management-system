@@ -20,6 +20,7 @@ import {
 import { getContractAttPreviewUrl } from '@/api/contract'
 import AttachmentLink from '@/components/AttachmentLink.vue'
 import type { ContractAttachmentItem, ContractItem, ContractRequest, ContractStatus, ProjectItem, UserOption, BusinessTypeItem } from '@/types'
+import { restoreQuery, saveQuery } from '@/utils/queryCache'
 
 // ---------- 状态展示 ----------
 const statusLabels: Record<number, string> = { 0: '草稿', 1: '执行中', 2: '已完成', 3: '已终止' }
@@ -157,6 +158,8 @@ const query = reactive({
   keeperName: '',
   status: undefined as ContractStatus | undefined,
 })
+restoreQuery('contract', query)
+watch(query, () => saveQuery('contract', query), { deep: true })
 
 async function fetchList(): Promise<void> {
   loading.value = true
