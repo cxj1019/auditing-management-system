@@ -35,8 +35,8 @@ function money(v: number | null | undefined): string {
 }
 
 const overviewCards = computed(() => [
-  { title: '总收入（元）', value: money(overview.value?.totalIncome), color: '#2563eb' },
-  { title: '总直接成本（元）', value: money(overview.value?.totalCost), color: '#e6a23c' },
+  { title: '总收入（不含税，元）', value: money(overview.value?.totalIncome), color: '#2563eb' },
+  { title: '总直接成本（不含税，元）', value: money(overview.value?.totalCost), color: '#e6a23c' },
   { title: '总毛利（元）', value: money(overview.value?.grossProfit), color: (overview.value?.grossProfit ?? 0) >= 0 ? '#67c23a' : '#f56c6c' },
   { title: '整体回款率', value: overview.value?.collectionRate != null ? `${overview.value.collectionRate}%` : '—', color: '#8b5cf6' },
 ])
@@ -64,7 +64,7 @@ async function handleExportHours(): Promise<void> {
     }
     const wb = XLSX.utils.book_new()
 
-    const profitHeader = ['项目编号', '项目名称', '客户', '合同金额（元）', '已回款（元）', '直接成本（元）', '人工成本（元）', '毛利（元）', '毛利率（%）']
+    const profitHeader = ['项目编号', '项目名称', '客户', '合同金额（元）', '收入（不含税）', '直接成本（不含税）', '人工成本（元）', '毛利（元）', '毛利率（%）']
     const profitData = profits.map((r) => [
       r.projectNo, r.projectName, r.clientName || '',
       Number(r.contractAmount || 0), Number(r.totalCollected || 0),
@@ -240,10 +240,10 @@ onMounted(() => {
             <el-table-column label="合同总额（元）" min-width="120" align="right">
               <template #default="{ row }">{{ money(row.contractAmount) }}</template>
             </el-table-column>
-            <el-table-column label="已收（元）" min-width="110" align="right">
+            <el-table-column label="收入（不含税）" min-width="120" align="right">
               <template #default="{ row }">{{ money(row.totalCollected) }}</template>
             </el-table-column>
-            <el-table-column label="直接成本（元）" min-width="120" align="right">
+            <el-table-column label="直接成本（不含税）" min-width="130" align="right">
               <template #default="{ row }">{{ money(row.directCost) }}</template>
             </el-table-column>
             <el-table-column label="毛利（元）" min-width="110" align="right">

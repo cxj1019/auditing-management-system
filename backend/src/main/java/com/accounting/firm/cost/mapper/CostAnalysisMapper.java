@@ -23,11 +23,19 @@ public interface CostAnalysisMapper {
             LEFT JOIN client cl ON cl.id = p.client_id
             LEFT JOIN (SELECT project_id, SUM(amount) AS contract_amount
                        FROM contract GROUP BY project_id) amt ON amt.project_id = p.id
-            LEFT JOIN (SELECT c.project_id, SUM(cp.amount) AS income
+            LEFT JOIN (SELECT c.project_id, SUM(
+                            CASE WHEN COALESCE(inv.tax_rate, c.tax_rate) IS NOT NULL
+                                 THEN cp.amount / (1 + COALESCE(inv.tax_rate, c.tax_rate) / 100)
+                                 ELSE cp.amount END) AS income
                        FROM contract_payment cp
                        JOIN contract c ON c.id = cp.contract_id
+                       LEFT JOIN invoice inv ON inv.id = cp.invoice_id
+                       WHERE c.project_id IS NOT NULL
                        GROUP BY c.project_id) rev ON rev.project_id = p.id
-            LEFT JOIN (SELECT COALESCE(i.project_id, r.project_id) AS project_id, SUM(i.amount) AS expense
+            LEFT JOIN (SELECT COALESCE(i.project_id, r.project_id) AS project_id,
+                              SUM(CASE WHEN i.invoice_type = 'vat_special' AND i.tax_rate IS NOT NULL
+                                       THEN i.amount / (1 + i.tax_rate / 100)
+                                       ELSE i.amount END) AS expense
                        FROM reimbursement_item i
                        JOIN reimbursement r ON r.id = i.reimbursement_id
                        WHERE r.status = 1 AND COALESCE(i.project_id, r.project_id) IS NOT NULL
