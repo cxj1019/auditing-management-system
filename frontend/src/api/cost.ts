@@ -1,5 +1,5 @@
 import request from './request'
-import type { CostOverview, LaborCostItem, LaborCostRequest, PageResult, ProjectProfitItem, ProjectHoursItem } from '@/types'
+import type { ExpenseStatItem, CostOverview, LaborCostItem, LaborCostRequest, PageResult, ProjectProfitItem, ProjectHoursItem } from '@/types'
 
 /** 项目利润表（year=项目年份筛选） */
 export function getProjectProfit(keyword?: string, year?: number): Promise<ProjectProfitItem[]> {
@@ -43,4 +43,10 @@ export function deleteLaborCost(id: number): Promise<void> {
 /** 项目工时汇总（按规则推算，含部门隔离） */
 export function getProjectHours(keyword?: string, year?: number): Promise<ProjectHoursItem[]> {
   return request.get('/cost/project-hours', { params: { ...(keyword ? { keyword } : {}), ...(year ? { year } : {}) } })
+}
+
+
+/** 员工费用统计：已批准报销按 申请人×类别 汇总 */
+export function getExpenseStats(year?: number): Promise<ExpenseStatItem[]> {
+  return request.get('/cost/expense-stats', { params: { year } })
 }

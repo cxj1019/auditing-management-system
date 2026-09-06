@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { pageProjects, createProject, updateProject, deleteProject, changeProjectStatus, listProjectMembers, addProjectMember, removeProjectMember } from '@/api/project'
+import { pageProjects, createProject, updateProjectReport, updateProject, deleteProject, changeProjectStatus, listProjectMembers, addProjectMember, removeProjectMember } from '@/api/project'
 import { pageClients } from '@/api/client'
 import { getUserOptions, getDepartmentOptions } from '@/api/user'
 import { useUserStore } from '@/stores/user'
@@ -58,6 +58,7 @@ const query = reactive({
   type: '',
   keyword: '',
   dateRange: [] as string[],
+  hasReport: undefined as boolean | undefined,
 })
 
 async function fetchList(): Promise<void> {
@@ -71,6 +72,7 @@ async function fetchList(): Promise<void> {
       keyword: query.keyword || undefined,
       startDate: query.dateRange?.[0],
       endDate: query.dateRange?.[1],
+      hasReport: query.hasReport,
     })
     records.value = data.records
     total.value = data.total
@@ -89,6 +91,7 @@ function handleReset(): void {
   query.type = ''
   query.keyword = ''
   query.dateRange = []
+  query.hasReport = undefined
   handleSearch()
 }
 
@@ -231,6 +234,39 @@ onMounted(() => {
   loadBizDict()
   loadDeptOptions()
 })
+// ---------- 报告登记 ----------
+const reportDialogVisible = ref(false)
+const reportSaving = ref(false)
+const reportTarget = ref<ProjectItem | null>(null)
+const reportForm = reactive({ reportNo: '', reportDate: '', reportPartnerName: '', reportRemark: '' })
+
+function openReport(row: ProjectItem): void {
+  reportTarget.value = row
+  Object.assign(reportForm, {
+    reportNo: row.reportNo || '',
+    reportDate: row.reportDate || '',
+    reportPartnerName: row.reportPartnerName || '',
+    reportRemark: row.reportRemark || '',
+  })
+  reportDialogVisible.value = true
+}
+
+async function handleReportSave(): Promise<void> {
+  if (!reportTarget.value) return
+  reportSaving.value = true
+  try {
+    await updateProjectReport(reportTarget.value.id, {
+      reportNo: reportForm.reportNo || undefined,
+      reportDate: reportForm.reportDate || undefined,
+      reportPartnerName: reportForm.reportPartnerName || undefined,
+      reportRemark: reportForm.reportRemark || undefined,
+    })
+    ElMessage.success('报告信息已登记')
+    reportDialogVisible.value = false
+    fetchList()
+  } finally { reportSaving.value = false }
+}
+
 // ---------- 参与人员 ----------
 const memberRoles = ['合伙人', '项目经理', '现场负责人', '组员']
 const memberDialogVisible = ref(false)
@@ -291,6 +327,7 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
             <el-option v-for="t in projectTypeOptions" :key="t" :label="t" :value="t" />
           </el-select>
           <el-input v-model="query.keyword" placeholder="编号/名称/客户" clearable style="width: 200px; margin-left: 8px" @keyup.enter="handleSearch" />
+          <el-checkbox v-model="query.hasReport" style="margin-left: 8px" @change="handleSearch">仅看已出报告</el-checkbox>
           <el-date-picker v-model="query.dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" style="width: 260px; margin-left: 8px" />
           <el-button type="primary" style="margin-left: 8px" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
@@ -310,6 +347,9 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
         <el-table-column label="归属部门" width="100">
           <template #default="{ row }">{{ deptNameMap[row.deptId] || '—' }}</template>
         </el-table-column>
+        <el-table-column label="报告文号" min-width="130" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.reportNo || '—' }}</template>
+        </el-table-column>
         <el-table-column prop="managerName" label="项目经理" width="100" />
         <el-table-column prop="partnerName" label="合伙人" width="100" />
         <el-table-column prop="siteLeaderName" label="现场负责人" width="110" />
@@ -321,8 +361,9 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
             <el-tag :type="statusTagTypes[row.status]" size="small">{{ statusLabels[row.status] }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
+            <el-button v-permission="'business:project:edit'" link type="warning" size="small" @click="openReport(row)">报告</el-button>
             <el-button link type="info" size="small" @click="openMembers(row)">人员</el-button>
             <template v-if="row.status !== 2">
               <el-button v-if="row.status === 0" v-permission="'business:project:edit'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
@@ -462,6 +503,28 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
           </template>
         </el-table-column>
       </el-table>
+    </el-dialog>
+
+    <!-- 报告登记 -->
+    <el-dialog v-model="reportDialogVisible" :title="`报告登记 - ${reportTarget?.name || ''}`" width="480px" append-to-body>
+      <el-form :model="reportForm" label-width="100px">
+        <el-form-item label="报告文号">
+          <el-input v-model="reportForm.reportNo" placeholder="如 瑞华审字(2026)第0001号" maxlength="100" />
+        </el-form-item>
+        <el-form-item label="出具日期">
+          <el-date-picker v-model="reportForm.reportDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="签发合伙人">
+          <el-input v-model="reportForm.reportPartnerName" maxlength="50" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="reportForm.reportRemark" type="textarea" :rows="2" maxlength="500" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="reportDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="reportSaving" @click="handleReportSave">保存</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>

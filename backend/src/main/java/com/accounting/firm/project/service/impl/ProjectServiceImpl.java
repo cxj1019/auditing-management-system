@@ -46,10 +46,12 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
     @Override
     public PageResult<Project> pageProjects(long current, long size,
                                             Integer status, String type, String keyword,
-                                            LocalDate startDate, LocalDate endDate) {
+                                            LocalDate startDate, LocalDate endDate,
+                                            Boolean hasReport) {
         LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(status != null, Project::getStatus, status)
-                .eq(StringUtils.hasText(type), Project::getType, type);
+                .eq(StringUtils.hasText(type), Project::getType, type)
+                .isNotNull(Boolean.TRUE.equals(hasReport), Project::getReportNo);
         if (StringUtils.hasText(keyword)) {
             // clientName 为联表字段，按客户名搜索走 EXISTS 子查询关联客户表
             wrapper.and(w -> w.like(Project::getProjectNo, keyword)
@@ -114,6 +116,19 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
             vo.setClientName(clientNames.get(p.getClientId()));
             return vo;
         }).toList();
+    }
+
+    @Override
+    public void updateReport(Long id, com.accounting.firm.project.dto.ProjectReportRequest request) {
+        Project project = getById(id);
+        if (project == null) {
+            throw new BusinessException("项目不存在");
+        }
+        project.setReportNo(request.getReportNo());
+        project.setReportDate(request.getReportDate());
+        project.setReportPartnerName(request.getReportPartnerName());
+        project.setReportRemark(request.getReportRemark());
+        updateById(project);
     }
 
     @Override

@@ -11,11 +11,69 @@ import {
   updateLaborCost,
   deleteLaborCost,
 } from '@/api/cost'
-import { getProjectHourDetails } from '@/api/cost'
+import { getProjectHourDetails, getExpenseStats } from '@/api/cost'
 import { pageProjects } from '@/api/project'
-import type { CostOverview, LaborCostItem, LaborCostRequest, ProjectHoursItem, ProjectItem, ProjectProfitItem } from '@/types'
+import type { ExpenseStatItem, CostOverview, LaborCostItem, LaborCostRequest, ProjectHoursItem, ProjectItem, ProjectProfitItem } from '@/types'
 
 const activeTab = ref('profit')
+
+// ---------- 员工费用统计 ----------
+const statYear = ref<number | undefined>(undefined)
+const statLoading = ref(false)
+const statRows = ref<ExpenseStatItem[]>([])
+
+async function fetchExpenseStats(): Promise<void> {
+  statLoading.value = true
+  try {
+    statRows.value = await getExpenseStats(statYear.value)
+  } finally { statLoading.value = false }
+}
+
+/** 类别列（数据动态聚合） */
+const statCategories = computed(() => {
+  const set: string[] = []
+  statRows.value.forEach((r) => { if (!set.includes(r.category)) set.push(r.category) })
+  return set
+})
+
+interface StatRow { applicantName: string; cells: Record<string, number>; total: number }
+const statMatrix = computed<StatRow[]>(() => {
+  const map = new Map<string, StatRow>()
+  statRows.value.forEach((r) => {
+    let row = map.get(r.applicantName)
+    if (!row) {
+      row = { applicantName: r.applicantName, cells: {}, total: 0 }
+      map.set(r.applicantName, row)
+    }
+    row.cells[r.category] = (row.cells[r.category] || 0) + Number(r.total || 0)
+    row.total += Number(r.total || 0)
+  })
+  return [...map.values()].sort((a, b) => b.total - a.total)
+})
+
+const statCategoryTotals = computed(() => {
+  const totals: Record<string, number> = {}
+  statRows.value.forEach((r) => {
+    totals[r.category] = (totals[r.category] || 0) + Number(r.total || 0)
+  })
+  return totals
+})
+
+function exportExpenseStats(): void {
+  const header = ['申请人', ...statCategories.value, '合计（元）']
+  const rows = statMatrix.value.map((r) => [
+    r.applicantName,
+    ...statCategories.value.map((c) => Number((r.cells[c] || 0).toFixed(2))),
+    Number(r.total.toFixed(2)),
+  ])
+  const totalRow = ['合计', ...statCategories.value.map((c) => Number((statCategoryTotals.value[c] || 0).toFixed(2))),
+    Number(statMatrix.value.reduce((sum, r) => sum + r.total, 0).toFixed(2))]
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows, totalRow])
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '费用统计')
+  XLSX.writeFile(wb, `员工费用统计_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  ElMessage.success('已导出')
+}
 
 // ---------- 项目年份筛选 ----------
 const currentYear = new Date().getFullYear()
@@ -264,6 +322,28 @@ onMounted(() => {
         </el-tab-pane>
 
         <!-- 页签二：人工成本 -->
+        <el-tab-pane label="费用统计" name="expense" lazy>
+          <div class="table-toolbar">
+            <div class="toolbar-filters">
+              <el-select v-model="statYear" placeholder="费用年份" clearable style="width: 130px" @change="fetchExpenseStats">
+                <el-option v-for="y in [2026, 2025, 2024, 2023]" :key="y" :label="y + ' 年'" :value="y" />
+              </el-select>
+            </div>
+            <el-button @click="exportExpenseStats" :disabled="!statRows.length">导出 Excel</el-button>
+          </div>
+          <el-table v-loading="statLoading" :data="statMatrix" border size="small" show-summary>
+            <el-table-column prop="applicantName" label="申请人" min-width="110" />
+            <el-table-column v-for="c in statCategories" :key="c" :label="c" min-width="110" align="right">
+              <template #default="{ row }">{{ (row.cells[c] || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</template>
+            </el-table-column>
+            <el-table-column label="合计（元）" min-width="120" align="right">
+              <template #default="{ row }">
+                <b>{{ row.total.toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</b>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div style="margin-top: 8px; color: #9ca3af; font-size: 13px">统计口径：已批准的报销单，按费用发生日期所属年份筛选。</div>
+        </el-tab-pane>
         <el-tab-pane label="人工成本" name="labor">
           <div class="table-toolbar">
             <span class="section-title">项目人工投入登记</span>

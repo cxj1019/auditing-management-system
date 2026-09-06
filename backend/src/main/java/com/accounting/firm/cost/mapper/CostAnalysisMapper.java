@@ -54,6 +54,32 @@ public interface CostAnalysisMapper {
             ORDER BY p.create_time DESC
             </script>
             """)
+    /** 员工费用统计：已批准报销按 申请人×类别 汇总 */
+    @Select("""
+            <script>
+            SELECT COALESCE(u.nickname, r.applicant_name) AS applicant_name,
+                   i.category,
+                   SUM(i.amount) AS total,
+                   COUNT(*) AS cnt
+            FROM reimbursement_item i
+            JOIN reimbursement r ON r.id = i.reimbursement_id
+            LEFT JOIN sys_user u ON u.id = r.applicant_id
+            WHERE r.status = 2
+            <if test="year != null">AND EXTRACT(YEAR FROM i.expense_date) = #{year}</if>
+            <if test="userIds != null and userIds.size() > 0">
+                AND r.applicant_id IN
+                <foreach item="uid" collection="userIds" open="(" separator="," close=")">#{uid}</foreach>
+            </if>
+            <if test="selfUserId != null">AND r.applicant_id = #{selfUserId}</if>
+            GROUP BY COALESCE(u.nickname, r.applicant_name), i.category
+            ORDER BY applicant_name, i.category
+            </script>
+            """)
+    List<com.accounting.firm.cost.dto.ExpenseStatVO> selectExpenseStats(
+            @Param("year") Integer year,
+            @Param("userIds") List<Long> userIds,
+            @Param("selfUserId") Long selfUserId);
+
     List<ProjectProfitVO> selectProjectProfit(@Param("keyword") String keyword,
                                               @Param("deptId") Long deptId,
                                               @Param("ownUsername") String ownUsername,

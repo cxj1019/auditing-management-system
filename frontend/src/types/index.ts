@@ -149,6 +149,10 @@ export interface ProjectItem {
   startDate: string
   endDate: string
   status: ProjectStatus
+  reportNo?: string
+  reportDate?: string
+  reportPartnerName?: string
+  reportRemark?: string
   remark?: string
   createTime?: string
 }
@@ -526,6 +530,14 @@ export interface ReimbursementItemData {
   taxAmountManual?: boolean
   projectId?: number
   billable?: boolean
+}
+
+/** 员工费用统计行 */
+export interface ExpenseStatItem {
+  applicantName: string
+  category: string
+  total: number
+  cnt: number
 }
 
 /** 客户对账单 */

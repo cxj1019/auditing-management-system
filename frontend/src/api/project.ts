@@ -10,8 +10,14 @@ export function pageProjects(params: {
   keyword?: string
   startDate?: string
   endDate?: string
+  hasReport?: boolean
 }): Promise<PageResult<ProjectItem>> {
   return request.get('/projects', { params })
+}
+
+/** 报告登记 */
+export function updateProjectReport(id: number, data: { reportNo?: string; reportDate?: string; reportPartnerName?: string; reportRemark?: string }): Promise<void> {
+  return request.put(`/projects/${id}/report`, data)
 }
 
 /** 项目下拉选项：全部非归档项目，不做部门隔离 */

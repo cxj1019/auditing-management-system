@@ -16,10 +16,14 @@ public interface ProjectService extends IService<Project> {
     /** 分页筛选查询项目（含日期范围） */
     PageResult<Project> pageProjects(long current, long size,
                                      Integer status, String type, String keyword,
-                                     java.time.LocalDate startDate, java.time.LocalDate endDate);
+                                     java.time.LocalDate startDate, java.time.LocalDate endDate,
+                                     Boolean hasReport);
 
     /** 项目下拉选项：全部非归档项目（不做部门隔离，供报销等成本归集场景关联） */
     List<ProjectOptionVO> listOptions();
+
+    /** 报告登记：登记/修改项目报告文号等信息（传 null 清空对应字段） */
+    void updateReport(Long id, com.accounting.firm.project.dto.ProjectReportRequest request);
 
     /** 登记项目（自动编号，初始状态进行中） */
     void createProject(ProjectRequest request);

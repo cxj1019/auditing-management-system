@@ -9,6 +9,7 @@ import com.accounting.firm.cost.entity.LaborCost;
 import com.accounting.firm.cost.mapper.CostAnalysisMapper;
 import com.accounting.firm.cost.mapper.LaborCostMapper;
 import com.accounting.firm.cost.service.CostAnalysisService;
+import com.accounting.firm.common.security.DataScopeService;
 import com.accounting.firm.common.security.SecurityUser;
 import com.accounting.firm.project.entity.Project;
 import com.accounting.firm.project.entity.ProjectStatus;
@@ -37,6 +38,7 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
         implements CostAnalysisService {
 
     private final CostAnalysisMapper costAnalysisMapper;
+    private final DataScopeService dataScopeService;
     private final ProjectMapper projectMapper;
     private final ScheduleMapper scheduleMapper;
     private final com.accounting.firm.system.mapper.SysUserMapper sysUserMapper;
@@ -141,6 +143,23 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
     }
 
     private record ProjectScope(Long deptId, String ownUsername) {
+    }
+
+    @Override
+    public List<com.accounting.firm.cost.dto.ExpenseStatVO> expenseStats(Integer year) {
+        // 与项目数据范围同规则：按申请人归属过滤（admin 全部；本部门；无部门仅本人）
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        List<Long> userIds = null;
+        Long selfUserId = null;
+        if (auth != null && auth.getPrincipal() instanceof SecurityUser user && !user.hasRole("admin")) {
+            var scope = dataScopeService.currentScope();
+            switch (scope.type()) {
+                case DEPT -> userIds = dataScopeService.getDeptScopedUserIds();
+                case SELF -> selfUserId = user.getUserId();
+                default -> { }
+            }
+        }
+        return costAnalysisMapper.selectExpenseStats(year, userIds, selfUserId);
     }
 
     @Override

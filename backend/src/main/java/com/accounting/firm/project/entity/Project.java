@@ -66,6 +66,18 @@ public class Project implements Serializable {
     /** 状态：0-进行中 1-已完成 2-已归档 */
     private Integer status;
 
+    /** 报告文号（审计报告台账） */
+    private String reportNo;
+
+    /** 报告出具日期 */
+    private LocalDate reportDate;
+
+    /** 签发合伙人 */
+    private String reportPartnerName;
+
+    /** 报告备注 */
+    private String reportRemark;
+
     /** 备注 */
     private String remark;
 

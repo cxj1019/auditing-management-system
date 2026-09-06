@@ -59,6 +59,13 @@ public class CostAnalysisController {
 
     /** 经营概览 */
     @PreAuthorize("hasAuthority('business:cost:list')")
+    /** 员工费用统计：已批准报销按 申请人×类别 汇总 */
+    @GetMapping("/expense-stats")
+    public ApiResult<List<com.accounting.firm.cost.dto.ExpenseStatVO>> expenseStats(
+            @RequestParam(required = false) Integer year) {
+        return ApiResult.success(costAnalysisService.expenseStats(year));
+    }
+
     @GetMapping("/overview")
     public ApiResult<OverviewVO> overview() {
         return ApiResult.success(costAnalysisService.overview());

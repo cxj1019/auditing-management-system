@@ -26,6 +26,9 @@ public interface CostAnalysisService extends IService<LaborCost> {
     /** 经营概览统计 */
     OverviewVO overview();
 
+    /** 员工费用统计：已批准报销按 申请人×类别 汇总（year 可空=全部年份） */
+    List<com.accounting.firm.cost.dto.ExpenseStatVO> expenseStats(Integer year);
+
     /** 分页查询人工成本 */
     PageResult<LaborCost> pageLaborCosts(long current, long size, Long projectId);
 

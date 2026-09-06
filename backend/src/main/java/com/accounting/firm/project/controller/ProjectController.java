@@ -45,8 +45,19 @@ public class ProjectController {
                                                @RequestParam(required = false)
                                                @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
                                                @RequestParam(required = false)
-                                               @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return ApiResult.success(projectService.pageProjects(current, size, status, type, keyword, startDate, endDate));
+                                               @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+                                               @RequestParam(required = false) Boolean hasReport) {
+        return ApiResult.success(projectService.pageProjects(current, size, status, type, keyword, startDate, endDate, hasReport));
+    }
+
+    /** 报告登记：登记/修改项目报告文号等信息 */
+    @AuditLog("项目报告登记")
+    @PreAuthorize("hasAuthority('business:project:edit')")
+    @PutMapping("/{id}/report")
+    public ApiResult<Void> updateReport(@PathVariable Long id,
+                                        @RequestBody com.accounting.firm.project.dto.ProjectReportRequest request) {
+        projectService.updateReport(id, request);
+        return ApiResult.success();
     }
 
     /** 项目下拉选项：非归档项目、按归属部门隔离（报销/合同/日程/函证等新增场景关联项目用） */
