@@ -251,7 +251,7 @@ async function handleChangeStatus(row: ContractItem, target: number, actionName:
 // ---------- 删除 ----------
 async function handleDelete(row: ContractItem): Promise<void> {
   try {
-    await ElMessageBox.confirm(`确定删除草稿合同「${row.name}」吗？`, '删除确认', {
+    await ElMessageBox.confirm(`确定删除合同「${row.name}」吗？删除后不可恢复。`, '删除确认', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
@@ -379,7 +379,7 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
             <el-button v-if="row.status === 0" v-permission="'business:contract:status'" link type="primary" size="small" @click="handleChangeStatus(row, 1, '开始执行')">开始执行</el-button>
             <el-button v-if="row.status === 1" v-permission="'business:contract:status'" link type="success" size="small" @click="handleChangeStatus(row, 2, '标记为已完成')">完成</el-button>
             <el-button v-if="row.status === 1" v-permission="'business:contract:status'" link type="warning" size="small" @click="handleChangeStatus(row, 3, '终止')">终止</el-button>
-            <el-button v-if="row.status === 0" v-permission="'business:contract:delete'" link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="row.status === 0 || row.status === 3" v-permission="'business:contract:delete'" link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

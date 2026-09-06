@@ -49,15 +49,21 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
     private final DataScopeService dataScopeService;
     private final ContractNoTypeMapper contractNoTypeMapper;
     private final BusinessTypeMapper businessTypeMapper;
+    private final com.accounting.firm.invoice.mapper.InvoiceMapper invoiceMapper;
+    private final com.accounting.firm.collection.mapper.ContractPaymentMapper paymentMapper;
 
     public ContractServiceImpl(ProjectMapper projectMapper, ClientMapper clientMapper,
                                DataScopeService dataScopeService, ContractNoTypeMapper contractNoTypeMapper,
-                               BusinessTypeMapper businessTypeMapper) {
+                               BusinessTypeMapper businessTypeMapper,
+                               com.accounting.firm.invoice.mapper.InvoiceMapper invoiceMapper,
+                               com.accounting.firm.collection.mapper.ContractPaymentMapper paymentMapper) {
         this.projectMapper = projectMapper;
         this.clientMapper = clientMapper;
         this.dataScopeService = dataScopeService;
         this.contractNoTypeMapper = contractNoTypeMapper;
         this.businessTypeMapper = businessTypeMapper;
+        this.invoiceMapper = invoiceMapper;
+        this.paymentMapper = paymentMapper;
     }
 
     @Override
@@ -274,8 +280,23 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
         if (contract == null) {
             throw new BusinessException("合同不存在");
         }
-        if (contract.getStatus() != ContractStatus.DRAFT.getCode()) {
-            throw new BusinessException("仅草稿状态的合同可删除");
+        // 草稿与已终止的合同可删除（已终止的合同无存续意义）
+        if (contract.getStatus() != ContractStatus.DRAFT.getCode()
+                && contract.getStatus() != ContractStatus.TERMINATED.getCode()) {
+            throw new BusinessException("仅草稿或已终止状态的合同可删除");
+        }
+        // 有发票或收款关联时不允许删除，避免产生孤儿数据
+        Long invoiceCount = invoiceMapper.selectCount(
+                new LambdaQueryWrapper<com.accounting.firm.invoice.entity.Invoice>()
+                        .eq(com.accounting.firm.invoice.entity.Invoice::getContractId, id));
+        if (invoiceCount > 0) {
+            throw new BusinessException("合同已关联发票，不可删除");
+        }
+        Long paymentCount = paymentMapper.selectCount(
+                new LambdaQueryWrapper<com.accounting.firm.collection.entity.ContractPayment>()
+                        .eq(com.accounting.firm.collection.entity.ContractPayment::getContractId, id));
+        if (paymentCount > 0) {
+            throw new BusinessException("合同已存在收款记录，不可删除");
         }
         removeById(id);
     }
