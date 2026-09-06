@@ -518,6 +518,21 @@ export interface ReimbursementItemData {
   billable?: boolean
 }
 
+/** 报销费用类别 */
+export interface ExpenseCategoryItem {
+  id: number
+  name: string
+  sort: number
+  status: number
+}
+
+/** 报销费用类别创建/编辑请求 */
+export interface ExpenseCategoryRequest {
+  name: string
+  sort?: number
+  status?: number
+}
+
 /** 报销单 */
 export interface ReimbursementItem {
   id: number

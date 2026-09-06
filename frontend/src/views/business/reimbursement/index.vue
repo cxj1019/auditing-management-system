@@ -2,6 +2,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
+import { listExpenseCategories, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from '@/api/expenseCategory'
+import type { ExpenseCategoryItem, ExpenseCategoryRequest } from '@/types'
 import * as XLSX from 'xlsx'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
@@ -35,7 +37,79 @@ import type {
 } from '@/types'
 
 const userStore = useUserStore()
-const categories = ['差旅费', '交通费', '办公费', '餐饮费', '其他']
+// 费用类别字典（系统管理员可在类别设置中增删改）
+const FALLBACK_CATEGORIES = ['差旅费', '交通费', '办公费', '餐饮费', '其他']
+const categories = ref<string[]>([...FALLBACK_CATEGORIES])
+
+async function loadCategories(): Promise<void> {
+  try {
+    const list = await listExpenseCategories()
+    if (list.length) {
+      categories.value = list.filter((c) => c.status === 1).map((c) => c.name)
+    }
+  } catch {
+    // 后端未部署类别字典时回退内置清单
+    categories.value = [...FALLBACK_CATEGORIES]
+  }
+}
+
+// ---------- 类别设置（系统管理员） ----------
+const catDialogVisible = ref(false)
+const catList = ref<ExpenseCategoryItem[]>([])
+const catFormVisible = ref(false)
+const catSaving = ref(false)
+const catEditingId = ref<number | null>(null)
+const catForm = reactive<ExpenseCategoryRequest>({ name: '', sort: 0, status: 1 })
+
+async function openCategorySettings(): Promise<void> {
+  catDialogVisible.value = true
+  await reloadCategories()
+}
+
+async function reloadCategories(): Promise<void> {
+  catList.value = await listExpenseCategories()
+  // 同步刷新表单下拉（含停用项，保证历史行正常显示）
+  categories.value = catList.value.length
+    ? catList.value.filter((c) => c.status === 1).map((c) => c.name)
+    : [...FALLBACK_CATEGORIES]
+}
+
+function openCatCreate(): void {
+  catEditingId.value = null
+  Object.assign(catForm, { name: '', sort: catList.value.length + 1, status: 1 })
+  catFormVisible.value = true
+}
+
+function openCatEdit(row: ExpenseCategoryItem): void {
+  catEditingId.value = row.id
+  Object.assign(catForm, { name: row.name, sort: row.sort, status: row.status })
+  catFormVisible.value = true
+}
+
+async function handleCatSave(): Promise<void> {
+  if (!catForm.name) { ElMessage.warning('请填写类别名称'); return }
+  catSaving.value = true
+  try {
+    if (catEditingId.value) {
+      await updateExpenseCategory(catEditingId.value, catForm)
+      ElMessage.success('类别已更新')
+    } else {
+      await createExpenseCategory(catForm)
+      ElMessage.success('类别已添加')
+    }
+    catFormVisible.value = false
+    await reloadCategories()
+  } finally { catSaving.value = false }
+}
+
+async function handleCatDelete(row: ExpenseCategoryItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`确定删除类别「${row.name}」吗？历史报销单据不受影响。`, '删除确认', { type: 'warning' })
+    await deleteExpenseCategory(row.id)
+    ElMessage.success('删除成功')
+    await reloadCategories()
+  } catch { /* 取消 */ }
+}
 const statusLabels: Record<number, string> = { 0: '草稿', 1: '待审批', 2: '已批准', 3: '已驳回', 4: '待终审' }
 const statusTagTypes: Record<number, 'info' | 'warning' | 'success' | 'danger' | 'primary'> = {
   0: 'info',
@@ -110,7 +184,7 @@ const projectOptions = ref<ProjectItem[]>([])
 
 function emptyItem(): ReimbursementItemData {
   // 新行默认继承单头"关联项目"，可按行改成其他项目（跨项目费用分摊）
-  return { category: '差旅费', amount: 0, expenseDate: new Date().toISOString().slice(0, 10), description: '', invoiceNumber: '', isVatInvoice: false, projectId: form.projectId ?? undefined, billable: false }
+  return { category: categories.value[0] || '其他', amount: 0, expenseDate: new Date().toISOString().slice(0, 10), description: '', invoiceNumber: '', isVatInvoice: false, projectId: form.projectId ?? undefined, billable: false }
 }
 
 function addItem(): void {
@@ -458,7 +532,10 @@ async function handleDetailRowUpload(options: UploadRequestOptions, itemId: numb
   }
 }
 
-onMounted(fetchList)
+onMounted(() => {
+  fetchList()
+  loadCategories()
+})
 
 function makeDetailRowUploader(itemId: number) {
   return (options: UploadRequestOptions) => handleDetailRowUpload(options, itemId)
@@ -568,7 +645,10 @@ function makeDetailRowUploader(itemId: number) {
       <div class="items-editor">
         <div class="items-header">
           <span class="section-title">费用明细</span>
-          <el-button size="small" type="primary" plain @click="addItem">加一行</el-button>
+          <div>
+            <el-button v-permission="'business:reimbursement:category'" size="small" @click="openCategorySettings">类别设置</el-button>
+            <el-button size="small" type="primary" plain @click="addItem">加一行</el-button>
+          </div>
         </div>
         <el-table :data="form.items" border size="small">
           <el-table-column label="类别" width="120">
@@ -850,6 +930,49 @@ function makeDetailRowUploader(itemId: number) {
         </div>
       </template>
     </el-drawer>
+
+    <!-- 类别设置（系统管理员） -->
+    <el-dialog v-model="catDialogVisible" title="费用类别设置" width="520px" append-to-body>
+      <div style="margin-bottom: 8px; text-align: right">
+        <el-button type="primary" size="small" @click="openCatCreate">+ 新增类别</el-button>
+      </div>
+      <el-table :data="catList" border size="small" max-height="360">
+        <el-table-column prop="name" label="类别名称" min-width="120" />
+        <el-table-column prop="sort" label="排序" width="70" align="center" />
+        <el-table-column label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="center">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openCatEdit(row)">编辑</el-button>
+            <el-button link type="danger" size="small" @click="handleCatDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="catFormVisible" :title="catEditingId ? '编辑类别' : '新增类别'" width="400px" append-to-body>
+      <el-form :model="catForm" label-width="90px">
+        <el-form-item label="类别名称" required>
+          <el-input v-model="catForm.name" placeholder="如 差旅费" maxlength="30" />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="catForm.sort" :min="0" :step="1" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-radio-group v-model="catForm.status">
+            <el-radio :value="1">启用</el-radio>
+            <el-radio :value="0">停用</el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="catFormVisible = false">取消</el-button>
+        <el-button type="primary" :loading="catSaving" @click="handleCatSave">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
