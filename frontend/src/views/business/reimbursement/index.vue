@@ -642,7 +642,7 @@ function makeDetailRowUploader(itemId: number) {
               <el-button v-permission="'business:reimbursement:approve'" link type="success" size="small" @click="openApprove(row, 'approve')">批准</el-button>
               <el-button v-permission="'business:reimbursement:approve'" link type="danger" size="small" @click="openApprove(row, 'reject')">驳回</el-button>
             </template>
-            <template v-if="row.status === 4">
+            <template v-if="row.status === 4 && (userStore.hasRole('partner') || userStore.isAdmin)">
               <el-button v-permission="'business:reimbursement:approve'" link type="success" size="small" @click="openApprove(row, 'approve')">终审批准</el-button>
               <el-button v-permission="'business:reimbursement:approve'" link type="danger" size="small" @click="openApprove(row, 'reject')">终审驳回</el-button>
             </template>

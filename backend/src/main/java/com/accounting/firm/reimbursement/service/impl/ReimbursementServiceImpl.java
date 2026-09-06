@@ -213,9 +213,9 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         }
         ReimbursementStatus current = ReimbursementStatus.of(bill.getStatus());
         boolean finalReview = current == ReimbursementStatus.PENDING_FINAL;
-        // 终审仅 admin 可操作
-        if (finalReview && !currentUser.hasRole("admin")) {
-            throw new BusinessException("待终审单据仅系统管理员可终审");
+        // 终审仅合伙人或系统管理员可操作
+        if (finalReview && !currentUser.hasRole("admin") && !currentUser.hasRole("partner")) {
+            throw new BusinessException("待终审单据仅合伙人或系统管理员可终审");
         }
         ReimbursementStatus target = switch (request.getAction()) {
             case "approve" -> ReimbursementStatus.APPROVED;
@@ -227,9 +227,10 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
             current.approveTo(target, true);
         } else {
             current.approveTo(target, false);
-            // 一级批准且金额超阈值且审批人非 admin → 转终审
+            // 一级批准且金额超阈值且审批人非合伙人/管理员 → 转终审
             if (target == ReimbursementStatus.APPROVED
                     && !currentUser.hasRole("admin")
+                    && !currentUser.hasRole("partner")
                     && nvl(bill.getTotalAmount()).compareTo(secondApprovalThreshold) > 0) {
                 bill.setStatus(ReimbursementStatus.PENDING_FINAL.getCode());
                 bill.setPrimaryApproverName(currentUser.getNickname());
