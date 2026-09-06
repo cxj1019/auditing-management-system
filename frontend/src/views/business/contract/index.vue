@@ -536,9 +536,6 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
         <el-form-item label="税额">
           <el-input-number v-model="form.taxAmount" :min="0" :precision="2" :step="1000" style="width: 100%" @change="onTaxAmountChange" />
         </el-form-item>
-        <el-form-item label="税额">
-          <el-input-number v-model="form.taxAmount" :min="0" :precision="2" :step="1000" style="width: 100%" @change="onTaxAmountChange" />
-        </el-form-item>
         <el-form-item label="签约日期" required>
           <el-date-picker v-model="form.signDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
         </el-form-item>
