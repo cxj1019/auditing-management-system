@@ -290,6 +290,9 @@ export interface ContractItem {
   contractType: string
   bizType?: string
   amount: number
+  taxRate?: number
+  amountExTax?: number
+  taxAmount?: number
   currency?: string
   foreignAmount?: number
   exchangeRate?: number
@@ -311,6 +314,9 @@ export interface ContractRequest {
   contractType: string
   bizType?: string
   amount: number
+  taxRate?: number
+  amountExTax?: number
+  taxAmount?: number
   signDate: string
   serviceStart?: string
   serviceEnd?: string

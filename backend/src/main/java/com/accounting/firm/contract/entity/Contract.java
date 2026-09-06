@@ -39,8 +39,17 @@ public class Contract implements Serializable {
     /** 业务类型（业务类型字典明细，决定字号与开票要素） */
     private String bizType;
 
-    /** 合同金额（元） */
+    /** 合同金额（元，价税合计/含税） */
     private BigDecimal amount;
+
+    /** 税率（%，可空） */
+    private BigDecimal taxRate;
+
+    /** 不含税金额（元，可空） */
+    private BigDecimal amountExTax;
+
+    /** 税额（元，可空） */
+    private BigDecimal taxAmount;
 
     /** 币种：人民币/美元/日元/欧元/港币/英镑 */
     private String currency;

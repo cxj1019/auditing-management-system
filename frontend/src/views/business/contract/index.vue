@@ -63,13 +63,51 @@ async function fetchRate(currency: string): Promise<void> {
   }
 }
 
+function round2(v: number): number {
+  return Math.round(v * 100) / 100
+}
+
 function deriveFromForeign(): void {
   if (!isFx.value || !form.foreignAmount || !form.exchangeRate) return
-  form.amount = Math.round((form.foreignAmount / 100) * form.exchangeRate * 100) / 100
+  form.amount = round2((form.foreignAmount / 100) * form.exchangeRate)
+  deriveTaxByAmount()
 }
 
 function onForeignChange(): void {
   deriveFromForeign()
+}
+
+/** 按税率从价税合计（含税）反拆不含税金额与税额 */
+function deriveTaxByAmount(): void {
+  if (form.amount == null || form.amount <= 0) return
+  if (form.taxRate == null) {
+    form.amountExTax = form.amount
+    form.taxAmount = 0
+    return
+  }
+  const ex = round2(form.amount / (1 + form.taxRate / 100))
+  form.amountExTax = ex
+  form.taxAmount = round2(form.amount - ex)
+}
+
+/** 价税合计手动变化：税额 = 价税合计 - 不含税 */
+function onAmountChange(): void {
+  deriveTaxByAmount()
+}
+
+/** 不含税金额/税率变化：税额 = 不含税 × 税率，价税合计 = 不含税 + 税额 */
+function onAmountExTaxChange(): void {
+  if (form.amountExTax == null || form.amountExTax <= 0) return
+  const tax = form.taxRate == null ? 0 : round2((form.amountExTax * form.taxRate) / 100)
+  form.taxAmount = tax
+  form.amount = round2(form.amountExTax + tax)
+}
+
+/** 税额手动变化：价税合计 = 不含税 + 税额 */
+function onTaxAmountChange(): void {
+  if (form.amountExTax != null && form.taxAmount != null) {
+    form.amount = round2(form.amountExTax + form.taxAmount)
+  }
 }
 
 watch(() => form.currency, async (c: string | undefined) => {
@@ -136,6 +174,9 @@ const form = reactive<ContractRequest>({
   name: '',
   contractType: '审计',
   amount: 0,
+  taxRate: undefined,
+  amountExTax: undefined,
+  taxAmount: undefined,
   signDate: '',
   serviceStart: '',
   serviceEnd: '',
@@ -172,6 +213,9 @@ function openCreate(): void {
     exchangeRate: undefined,
     ratePublishTime: undefined,
     amount: 0,
+    taxRate: undefined,
+    amountExTax: undefined,
+    taxAmount: undefined,
     signDate: '',
     serviceStart: '',
     serviceEnd: '',
@@ -196,6 +240,9 @@ function openEdit(row: ContractItem): void {
     exchangeRate: row.exchangeRate,
     ratePublishTime: row.ratePublishTime || '',
     amount: row.amount,
+    taxRate: row.taxRate,
+    amountExTax: row.amountExTax,
+    taxAmount: row.taxAmount,
     signDate: row.signDate,
     serviceStart: row.serviceStart || '',
     serviceEnd: row.serviceEnd || '',
@@ -362,8 +409,14 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
             <span v-else style="color: #9ca3af">人民币</span>
           </template>
         </el-table-column>
-        <el-table-column label="金额（元）" min-width="120" align="right">
+        <el-table-column label="合同金额（含税，元）" min-width="140" align="right">
           <template #default="{ row }">{{ Number(row.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</template>
+        </el-table-column>
+        <el-table-column label="税率" width="80" align="center">
+          <template #default="{ row }">{{ row.taxRate != null ? row.taxRate + '%' : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="不含税金额（元）" min-width="130" align="right">
+          <template #default="{ row }">{{ row.amountExTax != null ? Number(row.amountExTax).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) : '—' }}</template>
         </el-table-column>
         <el-table-column prop="keeperName" label="合同保管人" width="110" />
         <el-table-column prop="signDate" label="签约日期" width="110" />
@@ -454,8 +507,17 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="合同金额（元）" required>
-          <el-input-number v-model="form.amount" :min="0.01" :precision="2" :step="1000" style="width: 100%" @change="deriveFromForeign" />
+        <el-form-item label="合同金额（含税）" required>
+          <el-input-number v-model="form.amount" :min="0.01" :precision="2" :step="1000" style="width: 100%" @change="onAmountChange" />
+        </el-form-item>
+        <el-form-item label="税率（%）">
+          <el-input-number v-model="form.taxRate" :min="0" :max="100" :precision="2" :step="1" style="width: 100%" placeholder="可空" @change="deriveTaxByAmount" />
+        </el-form-item>
+        <el-form-item label="不含税金额">
+          <el-input-number v-model="form.amountExTax" :min="0" :precision="2" :step="1000" style="width: 100%" @change="onAmountExTaxChange" />
+        </el-form-item>
+        <el-form-item label="税额">
+          <el-input-number v-model="form.taxAmount" :min="0" :precision="2" :step="1000" style="width: 100%" @change="onTaxAmountChange" />
         </el-form-item>
         <el-form-item label="签约日期" required>
           <el-date-picker v-model="form.signDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />

@@ -3,6 +3,7 @@ package com.accounting.firm.contract.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -38,6 +39,17 @@ public class ContractRequest {
 
     @NotNull(message = "合同金额不能为空")
     private BigDecimal amount;
+
+    /** 税率（%，可空） */
+    private BigDecimal taxRate;
+
+    /** 不含税金额（元，可空；未填时按含税金额与税率反拆） */
+    @Positive(message = "不含税金额必须大于 0")
+    private BigDecimal amountExTax;
+
+    /** 税额（元，可空） */
+    @PositiveOrZero(message = "税额不能为负")
+    private BigDecimal taxAmount;
 
     /** 币种（境外客户可选外币，默认人民币） */
     @Size(max = 10, message = "币种长度不能超过 10")

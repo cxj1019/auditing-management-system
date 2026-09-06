@@ -396,6 +396,9 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
         contract.setContractType(request.getContractType());
         contract.setBizType(request.getBizType());
         contract.setAmount(request.getAmount());
+        contract.setTaxRate(request.getTaxRate());
+        contract.setAmountExTax(request.getAmountExTax());
+        contract.setTaxAmount(request.getTaxAmount());
         contract.setCurrency(StringUtils.hasText(request.getCurrency()) ? request.getCurrency() : "人民币");
         contract.setForeignAmount(request.getForeignAmount());
         contract.setExchangeRate(request.getExchangeRate());

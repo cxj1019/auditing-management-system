@@ -37,6 +37,12 @@ public class ContractVO {
     private String bizType;
 
     private BigDecimal amount;
+    /** 税率（%，可空） */
+    private BigDecimal taxRate;
+    /** 不含税金额（元，可空） */
+    private BigDecimal amountExTax;
+    /** 税额（元，可空） */
+    private BigDecimal taxAmount;
     /** 币种 */
     private String currency;
 
@@ -73,6 +79,9 @@ public class ContractVO {
         vo.setContractType(c.getContractType());
         vo.setBizType(c.getBizType());
         vo.setAmount(c.getAmount());
+        vo.setTaxRate(c.getTaxRate());
+        vo.setAmountExTax(c.getAmountExTax());
+        vo.setTaxAmount(c.getTaxAmount());
         vo.setCurrency(c.getCurrency());
         vo.setForeignAmount(c.getForeignAmount());
         vo.setExchangeRate(c.getExchangeRate());
