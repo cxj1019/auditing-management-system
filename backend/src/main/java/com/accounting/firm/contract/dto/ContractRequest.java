@@ -25,7 +25,7 @@ public class ContractRequest {
     @Positive(message = "项目 ID 不合法")
     private Long projectId;
 
-    @NotBlank(message = "合同名称不能为空")
+    /** 合同名称（可不填，留空时以合同字号代替） */
     @Size(max = 200, message = "合同名称长度不能超过 200")
     private String name;
 
@@ -67,7 +67,7 @@ public class ContractRequest {
     @Size(max = 40, message = "牌价发布时间长度不能超过 40")
     private String ratePublishTime;
 
-    @NotNull(message = "签约日期不能为空")
+    /** 签约日期（可空；编号年份未填时按当前年份） */
     private LocalDate signDate;
 
     /** 服务期限开始日期（可空：未约定期间时留空） */

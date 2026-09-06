@@ -285,6 +285,7 @@ async function handleSave(): Promise<void> {
     // 服务期间未填的字段归一化为 undefined(未约定期间);非外币时清空外币字段
     const payload = {
       ...form,
+      signDate: form.signDate || undefined,
       serviceStart: form.serviceStart || undefined,
       serviceEnd: form.serviceEnd || undefined,
       foreignAmount: isFx.value ? form.foreignAmount : undefined,
@@ -308,7 +309,7 @@ async function handleSave(): Promise<void> {
 // ---------- 状态流转 ----------
 async function handleChangeStatus(row: ContractItem, target: number, actionName: string): Promise<void> {
   try {
-    await ElMessageBox.confirm(`确定将合同「${row.name}」${actionName}吗？`, '状态流转', {
+    await ElMessageBox.confirm(`确定将合同「${row.name || row.contractNo}」${actionName}吗？`, '状态流转', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
@@ -324,7 +325,7 @@ async function handleChangeStatus(row: ContractItem, target: number, actionName:
 // ---------- 删除 ----------
 async function handleDelete(row: ContractItem): Promise<void> {
   try {
-    await ElMessageBox.confirm(`确定删除合同「${row.name}」吗？删除后不可恢复。`, '删除确认', {
+    await ElMessageBox.confirm(`确定删除合同「${row.name || row.contractNo}」吗？删除后不可恢复。`, '删除确认', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
@@ -404,7 +405,6 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
       <!-- 筛选栏 -->
       <div class="table-toolbar">
         <div class="toolbar-filters">
-          <el-input v-model="query.name" placeholder="合同名称" clearable style="width: 160px" @keyup.enter="handleSearch" />
           <el-input v-model="query.clientName" placeholder="客户名称" clearable style="width: 160px; margin-left: 8px" @keyup.enter="handleSearch" />
           <el-input v-model="query.keeperName" placeholder="合同保管人" clearable style="width: 140px; margin-left: 8px" @keyup.enter="handleSearch" />
           <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px; margin-left: 8px">
@@ -424,7 +424,6 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
         <el-table-column label="所属项目" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ row.projectNo ? `${row.projectNo} ${row.projectName}` : '—' }}</template>
         </el-table-column>
-        <el-table-column prop="name" label="合同名称" min-width="180" show-overflow-tooltip />
         <el-table-column prop="clientName" label="客户名称" min-width="150" show-overflow-tooltip />
         <el-table-column label="业务类型" min-width="130" show-overflow-tooltip>
           <template #default="{ row }">{{ row.bizType || row.contractType }}</template>
@@ -493,9 +492,6 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
         <el-form-item label="所属客户">
           <el-input :model-value="selectedProjectClient" readonly placeholder="选择项目后自动带出" />
         </el-form-item>
-        <el-form-item label="合同名称" required>
-          <el-input v-model="form.name" placeholder="合同名称" maxlength="200" />
-        </el-form-item>
         <el-form-item label="业务类型" required>
           <div style="width: 100%">
             <el-select v-model="form.bizType" placeholder="选择业务类型（按附件业务配置）" filterable style="width: 100%" @change="onBizTypeChange">
@@ -545,8 +541,8 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
         <el-form-item label="税额">
           <el-input-number v-model="form.taxAmount" :min="0" :precision="2" :step="1000" style="width: 100%" @change="onTaxAmountChange" />
         </el-form-item>
-        <el-form-item label="签约日期" required>
-          <el-date-picker v-model="form.signDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
+        <el-form-item label="签约日期">
+          <el-date-picker v-model="form.signDate" type="date" value-format="YYYY-MM-DD" placeholder="选择日期（可选，不填按当前年份编号）" style="width: 100%" />
         </el-form-item>
         <el-form-item label="服务期限">
           <el-date-picker v-model="form.serviceStart" type="date" value-format="YYYY-MM-DD" placeholder="开始日期" style="width: 48%" />

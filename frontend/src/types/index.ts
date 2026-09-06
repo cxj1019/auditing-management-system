@@ -284,7 +284,7 @@ export interface ContractItem {
   projectNo?: string
   projectName?: string
   contractNo: string
-  name: string
+  name?: string
   /** 客户名称（来自所属项目，只读） */
   clientName?: string
   contractType: string
@@ -310,14 +310,14 @@ export interface ContractItem {
 export interface ContractRequest {
   id?: number
   projectId: number
-  name: string
+  name?: string
   contractType: string
   bizType?: string
   amount: number
   taxRate?: number
   amountExTax?: number
   taxAmount?: number
-  signDate: string
+  signDate?: string
   serviceStart?: string
   serviceEnd?: string
   keeperName: string

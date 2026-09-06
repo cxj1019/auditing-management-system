@@ -228,6 +228,10 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
             deriveFxAmount(contract);
             contract.setProjectId(request.getProjectId());
             contract.setContractNo(contractNo);
+            // 合同名称留空时以字号代替，保证各处展示有标识
+            if (!StringUtils.hasText(contract.getName())) {
+                contract.setName(contractNo);
+            }
             contract.setStatus(ContractStatus.DRAFT.getCode());
             try {
                 save(contract);
@@ -322,6 +326,8 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
      * ③ 均未配置的（评估/其他等）沿用 HT 日期流水规则。
      */
     private String generateContractNo(ContractRequest request) {
+        // 年份取签约日期，未填签约日期时按当前年份
+        int year = request.getSignDate() != null ? request.getSignDate().getYear() : LocalDate.now().getYear();
         // ① 业务类型字典的字号类型优先
         if (StringUtils.hasText(request.getBizType())) {
             BusinessType bizType = businessTypeMapper.selectOne(new LambdaQueryWrapper<BusinessType>()
@@ -332,7 +338,7 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
                         .eq(ContractNoType::getTypeChar, bizType.getNoChar())
                         .last("LIMIT 1"));
                 if (noType != null) {
-                    return generateStructuredNo(noType.getPrefix(), request.getSignDate().getYear());
+                    return generateStructuredNo(noType.getPrefix(), year);
                 }
             }
         }
@@ -340,7 +346,7 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
         ContractNoType noType = contractNoTypeMapper.selectOne(new LambdaQueryWrapper<ContractNoType>()
                 .eq(ContractNoType::getContractType, request.getContractType()));
         if (noType != null) {
-            return generateStructuredNo(noType.getPrefix(), request.getSignDate().getYear());
+            return generateStructuredNo(noType.getPrefix(), year);
         }
         // ③ 兜底
         return generateLegacyNo();
