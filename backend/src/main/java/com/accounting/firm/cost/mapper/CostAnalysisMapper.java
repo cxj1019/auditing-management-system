@@ -54,6 +54,11 @@ public interface CostAnalysisMapper {
             ORDER BY p.create_time DESC
             </script>
             """)
+    List<ProjectProfitVO> selectProjectProfit(@Param("keyword") String keyword,
+                                              @Param("deptId") Long deptId,
+                                              @Param("ownUsername") String ownUsername,
+                                              @Param("year") Integer year);
+
     /** 员工费用统计：已批准报销按 申请人×类别 汇总 */
     @Select("""
             <script>
@@ -79,9 +84,4 @@ public interface CostAnalysisMapper {
             @Param("year") Integer year,
             @Param("userIds") List<Long> userIds,
             @Param("selfUserId") Long selfUserId);
-
-    List<ProjectProfitVO> selectProjectProfit(@Param("keyword") String keyword,
-                                              @Param("deptId") Long deptId,
-                                              @Param("ownUsername") String ownUsername,
-                                              @Param("year") Integer year);
 }
