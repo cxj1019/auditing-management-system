@@ -124,14 +124,21 @@ const contactForm = reactive<ClientContactRequest & { id?: number }>({
   contactName: '', position: '', phone: '', email: '', remark: '',
 })
 
+/** 拉取指定客户的联系人清单（失败不抛错，返回空列表） */
+async function fetchContacts(clientId: number): Promise<ClientContactItem[]> {
+  try {
+    return await listClientContacts(clientId)
+  } catch {
+    // 后端尚未部署联系人接口等情况：不阻断客户编辑/详情
+    return []
+  }
+}
+
 async function loadContacts(): Promise<void> {
   if (!form.id) return
   contactsLoading.value = true
   try {
-    contacts.value = await listClientContacts(form.id)
-  } catch {
-    // 后端尚未部署联系人接口等情况：不阻断客户编辑，联系人页签显示为空
-    contacts.value = []
+    contacts.value = await fetchContacts(form.id)
   } finally { contactsLoading.value = false }
 }
 
@@ -177,6 +184,28 @@ async function handleContactDelete(row: ClientContactItem): Promise<void> {
   } catch { /* 取消 */ }
 }
 
+// ---------- 客户详情抽屉 ----------
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const detailClient = ref<ClientItem | null>(null)
+const detailContacts = ref<ClientContactItem[]>([])
+
+async function openDetail(row: ClientItem): Promise<void> {
+  detailClient.value = row
+  detailVisible.value = true
+  detailLoading.value = true
+  try {
+    detailContacts.value = await fetchContacts(row.id)
+  } finally { detailLoading.value = false }
+}
+
+/** 详情抽屉里直接进入编辑 */
+function editFromDetail(): void {
+  if (!detailClient.value) return
+  detailVisible.value = false
+  openEdit(detailClient.value)
+}
+
 async function handleDelete(row: ClientItem): Promise<void> {
   try {
     await ElMessageBox.confirm(`确定删除客户「${row.clientName}」吗？`, '删除确认', { type: 'warning' })
@@ -204,7 +233,7 @@ onMounted(fetchList)
         <el-button v-permission="'business:client:add'" type="primary" @click="openCreate">登记客户</el-button>
       </div>
 
-      <el-table v-loading="loading" :data="records" border stripe>
+      <el-table v-loading="loading" :data="records" border stripe class="client-table" @row-click="openDetail">
         <el-table-column prop="clientNo" label="客户编号" min-width="150" />
         <el-table-column prop="clientName" label="客户名称" min-width="180" show-overflow-tooltip />
         <el-table-column label="类型" width="80" align="center">
@@ -215,10 +244,11 @@ onMounted(fetchList)
         <el-table-column prop="creditCode" label="统一信用代码" min-width="180" show-overflow-tooltip />
         <el-table-column prop="registeredCapital" label="注册资本" min-width="110" />
         <el-table-column prop="legalRepresentative" label="法定代表人" width="110" />
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="170" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status !== 3" v-permission="'business:client:edit'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button v-if="row.status !== 3" v-permission="'business:client:delete'" link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button link type="info" size="small" @click.stop="openDetail(row)">详情</el-button>
+            <el-button v-if="row.status !== 3" v-permission="'business:client:edit'" link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
+            <el-button v-if="row.status !== 3" v-permission="'business:client:delete'" link type="danger" size="small" @click.stop="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -338,9 +368,64 @@ onMounted(fetchList)
         <el-button type="primary" :loading="contactSaving" @click="handleContactSave">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 客户详情抽屉 -->
+    <el-drawer v-model="detailVisible" :title="detailClient?.clientName || '客户详情'" size="560px">
+      <div v-if="detailClient" v-loading="detailLoading">
+        <div class="detail-actions">
+          <el-button v-permission="'business:client:edit'" type="primary" size="small" @click="editFromDetail">编辑客户</el-button>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-section-title">基本信息</div>
+          <el-descriptions :column="1" border size="small">
+            <el-descriptions-item label="客户编号">{{ detailClient.clientNo }}</el-descriptions-item>
+            <el-descriptions-item label="客户名称">{{ detailClient.clientName }}</el-descriptions-item>
+            <el-descriptions-item label="客户类型">
+              <el-tag :type="typeTagTypes[detailClient.clientType]" size="small">{{ typeLabels[detailClient.clientType] }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="统一信用代码">{{ detailClient.creditCode || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="注册资本">{{ detailClient.registeredCapital || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="注册地">{{ detailClient.registeredAddress || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="法定代表人">{{ detailClient.legalRepresentative || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="经营范围">{{ detailClient.businessScope || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="备注">{{ detailClient.remark || '—' }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-section-title">开票信息</div>
+          <el-descriptions :column="1" border size="small">
+            <el-descriptions-item label="开票抬头">{{ detailClient.invoiceTitle || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="纳税人识别号">{{ detailClient.invoiceTaxNo || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="开户银行">{{ detailClient.invoiceBankName || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="银行账号">{{ detailClient.invoiceBankAccount || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="开票地址">{{ detailClient.invoiceAddress || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="开票电话">{{ detailClient.invoicePhone || '—' }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-section-title">联系人（{{ detailContacts.length }}）</div>
+          <el-table v-if="detailContacts.length" :data="detailContacts" border size="small">
+            <el-table-column prop="contactName" label="姓名" min-width="80" />
+            <el-table-column prop="position" label="职务" min-width="80" show-overflow-tooltip />
+            <el-table-column prop="phone" label="电话" min-width="110" show-overflow-tooltip />
+            <el-table-column prop="email" label="邮箱" min-width="130" show-overflow-tooltip />
+            <el-table-column prop="remark" label="备注" min-width="80" show-overflow-tooltip />
+          </el-table>
+          <div v-else class="detail-empty">暂无联系人</div>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <style scoped>
 .toolbar-filters { display: flex; align-items: center; }
+.client-table :deep(tbody tr) { cursor: pointer; }
+.detail-actions { margin-bottom: 12px; text-align: right; }
+.detail-section { margin-bottom: 20px; }
+.detail-section-title { font-weight: 600; color: #1f2937; margin-bottom: 8px; }
+.detail-empty { color: #9ca3af; font-size: 13px; }
 </style>
