@@ -17,8 +17,14 @@ import com.accounting.firm.notify.mapper.SysNotificationMapper;
 import com.accounting.firm.notify.service.NotifyService;
 import com.accounting.firm.reimbursement.entity.Reimbursement;
 import com.accounting.firm.reimbursement.mapper.ReimbursementMapper;
+import com.accounting.firm.system.entity.SysMenu;
+import com.accounting.firm.system.entity.SysRole;
 import com.accounting.firm.system.entity.SysUser;
+import com.accounting.firm.system.mapper.SysMenuMapper;
+import com.accounting.firm.system.mapper.SysRoleMapper;
+import com.accounting.firm.system.mapper.SysRoleMenuMapper;
 import com.accounting.firm.system.mapper.SysUserMapper;
+import com.accounting.firm.system.mapper.SysUserRoleMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +74,10 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
     private final ReimbursementMapper reimbursementMapper;
     private final ContractMapper contractMapper;
     private final SysUserMapper sysUserMapper;
+    private final SysMenuMapper sysMenuMapper;
+    private final SysRoleMapper sysRoleMapper;
+    private final SysRoleMenuMapper sysRoleMenuMapper;
+    private final SysUserRoleMapper sysUserRoleMapper;
 
     @Override
     public List<SysNotification> listMine(long limit) {
@@ -188,6 +198,72 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
                     "/business/contract", "合同即将到期", content);
         }
         return created;
+    }
+
+    @Override
+    public void push(Long userId, String type, Long relatedId, String path, String title, String content) {
+        if (userId == null) {
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        boolean exists = count(new LambdaQueryWrapper<SysNotification>()
+                .eq(SysNotification::getUserId, userId)
+                .eq(SysNotification::getType, type)
+                .eq(SysNotification::getRelatedId, relatedId)
+                .eq(SysNotification::getDedupDate, today)) > 0;
+        if (exists) {
+            return;
+        }
+        SysNotification notification = new SysNotification();
+        notification.setUserId(userId);
+        notification.setType(type);
+        notification.setTitle(title);
+        notification.setContent(content);
+        notification.setRelatedPath(path);
+        notification.setRelatedId(relatedId);
+        notification.setIsRead(0);
+        notification.setDedupDate(today);
+        notification.setCreateTime(LocalDateTime.now());
+        save(notification);
+    }
+
+    @Override
+    public List<Long> userIdsWithPermission(String perm) {
+        SysMenu menu = sysMenuMapper.selectOne(new LambdaQueryWrapper<SysMenu>()
+                .eq(SysMenu::getPerm, perm).last("LIMIT 1"));
+        if (menu == null) {
+            return List.of();
+        }
+        List<Long> roleIds = sysRoleMenuMapper.selectList(new LambdaQueryWrapper<com.accounting.firm.system.entity.SysRoleMenu>()
+                        .eq(com.accounting.firm.system.entity.SysRoleMenu::getMenuId, menu.getId()))
+                .stream().map(com.accounting.firm.system.entity.SysRoleMenu::getRoleId).toList();
+        return usersOfRoles(roleIds);
+    }
+
+    @Override
+    public List<Long> userIdsWithRole(String roleCode) {
+        SysRole role = sysRoleMapper.selectOne(new LambdaQueryWrapper<SysRole>()
+                .eq(SysRole::getRoleCode, roleCode).last("LIMIT 1"));
+        if (role == null) {
+            return List.of();
+        }
+        return usersOfRoles(List.of(role.getId()));
+    }
+
+    /** 按角色集合查出启用状态的用户 ID（去重） */
+    private List<Long> usersOfRoles(List<Long> roleIds) {
+        if (roleIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> userIds = sysUserRoleMapper.selectList(new LambdaQueryWrapper<com.accounting.firm.system.entity.SysUserRole>()
+                        .in(com.accounting.firm.system.entity.SysUserRole::getRoleId, roleIds))
+                .stream().map(com.accounting.firm.system.entity.SysUserRole::getUserId).distinct().toList();
+        if (userIds.isEmpty()) {
+            return List.of();
+        }
+        return sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                        .in(SysUser::getId, userIds).eq(SysUser::getStatus, 1))
+                .stream().map(SysUser::getId).toList();
     }
 
     /** 给业务创建人发通知；按 用户+类型+关联对象+当天 去重。返回 0/1 */

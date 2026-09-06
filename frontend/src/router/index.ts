@@ -30,6 +30,13 @@ export const constantRoutes: RouteRecordRaw[] = [
     ],
   },
   {
+    // 移动端报销审批视图：手机浏览器直接访问，卡片式审批
+    path: '/m/approval',
+    name: 'MobileApproval',
+    component: () => import('@/views/business/reimbursement/mobile.vue'),
+    meta: { title: '报销审批' },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/error/404.vue'),

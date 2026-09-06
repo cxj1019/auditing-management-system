@@ -27,4 +27,13 @@ public interface NotifyService extends IService<SysNotification> {
      * 按 用户+类型+关联对象+当天 去重。返回本次新增条数。
      */
     int generateDailyReminders();
+
+    /** 业务事件实时推送：给单个用户发站内通知（按 用户+类型+关联对象+当天 去重） */
+    void push(Long userId, String type, Long relatedId, String path, String title, String content);
+
+    /** 拥有指定权限标识的全部启用用户 ID */
+    List<Long> userIdsWithPermission(String perm);
+
+    /** 拥有指定角色编码的全部启用用户 ID */
+    List<Long> userIdsWithRole(String roleCode);
 }

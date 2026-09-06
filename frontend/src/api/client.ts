@@ -1,5 +1,5 @@
 import request from './request'
-import type { ClientContactItem, ClientContactRequest, ClientItem, ClientRequest, PageResult } from '@/types'
+import type { ClientContactItem, ClientContactRequest, ClientItem, ClientRequest, ClientStatementVO, PageResult } from '@/types'
 
 export function pageClients(params: {
   current: number; size: number; keyword?: string; clientType?: string
@@ -39,4 +39,9 @@ export function updateClientContact(clientId: number, contactId: number, data: C
 /** 删除联系人 */
 export function deleteClientContact(clientId: number, contactId: number): Promise<void> {
   return request.delete(`/clients/${clientId}/contacts/${contactId}`)
+}
+
+/** 客户对账单 */
+export function getClientStatement(id: number): Promise<ClientStatementVO> {
+  return request.get(`/clients/${id}/statement`)
 }

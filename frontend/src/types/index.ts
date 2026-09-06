@@ -528,6 +528,20 @@ export interface ReimbursementItemData {
   billable?: boolean
 }
 
+/** 客户对账单 */
+export interface ClientStatementVO {
+  clientNo: string
+  clientName: string
+  clientType: string
+  contractTotal: number
+  invoiceIssuedTotal: number
+  collectedTotal: number
+  outstanding: number
+  contracts: { contractNo: string; name?: string; projectName?: string; amount: number; statusLabel: string }[]
+  invoices: { invoiceNo: string; contractNo?: string; invoiceDate?: string; amount: number; amountExTax?: number; taxAmount?: number; statusLabel: string }[]
+  payments: { paymentDate?: string; contractNo?: string; amount: number; paymentMethod?: string }[]
+}
+
 /** 应收账龄行 */
 export interface InvoiceAgingItem {
   invoiceId: number

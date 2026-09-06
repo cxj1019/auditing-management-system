@@ -46,6 +46,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
     private final com.accounting.firm.reimbursement.mapper.ReimbursementAttachmentMapper attachmentMapper;
     private final com.accounting.firm.common.storage.SupabaseStorageService storageService;
     private final DataScopeService dataScopeService;
+    private final com.accounting.firm.notify.service.NotifyService notifyService;
 
     /** 二级审批阈值（元）：一级批准时超过该金额转终审 */
     @Value("${reimbursement.second-approval-threshold:5000}")
@@ -55,12 +56,14 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
                                     ProjectMapper projectMapper,
                                     com.accounting.firm.reimbursement.mapper.ReimbursementAttachmentMapper attachmentMapper,
                                     com.accounting.firm.common.storage.SupabaseStorageService storageService,
-                                    DataScopeService dataScopeService) {
+                                    DataScopeService dataScopeService,
+                                    com.accounting.firm.notify.service.NotifyService notifyService) {
         this.itemMapper = itemMapper;
         this.projectMapper = projectMapper;
         this.attachmentMapper = attachmentMapper;
         this.storageService = storageService;
         this.dataScopeService = dataScopeService;
+        this.notifyService = notifyService;
     }
 
     @Override
@@ -235,6 +238,15 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
                 bill.setStatus(ReimbursementStatus.PENDING_FINAL.getCode());
                 bill.setPrimaryApproverName(currentUser.getNickname());
                 updateById(bill);
+                // 通知合伙人/管理员终审
+                String finalContent = "报销单 %s（%s 元，%s）一级审批通过，待终审".formatted(
+                        bill.getReimbursementNo(), bill.getTotalAmount(), bill.getTitle());
+                java.util.Set<Long> finalReviewers = new java.util.HashSet<>(notifyService.userIdsWithRole("partner"));
+                finalReviewers.addAll(notifyService.userIdsWithPermission("business:reimbursement:approve"));
+                for (Long reviewerId : finalReviewers) {
+                    notifyService.push(reviewerId, "reimbursement", bill.getId(),
+                            "/business/reimbursement", "报销待终审", finalContent);
+                }
                 return;
             }
         }
@@ -244,6 +256,17 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         bill.setApproveTime(LocalDateTime.now());
         bill.setApproveComment(request.getComment());
         updateById(bill);
+        // 审批结果实时通知申请人
+        if (bill.getApplicantId() != null) {
+            String result = target == ReimbursementStatus.APPROVED ? "已批准" : "已驳回";
+            String content = "您的报销单 %s（%s 元）%s".formatted(
+                    bill.getReimbursementNo(), bill.getTotalAmount(), result);
+            if (request.getComment() != null && !request.getComment().isBlank()) {
+                content += "，审批意见：" + request.getComment();
+            }
+            notifyService.push(bill.getApplicantId(), "reimbursement", bill.getId(),
+                    "/business/reimbursement", "报销审批结果", content);
+        }
     }
 
     @Override

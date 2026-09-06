@@ -77,6 +77,13 @@ public class ClientController {
         return ApiResult.success(clientService.pageClients(current, size, keyword, clientType));
     }
 
+    /** 客户对账单 */
+    @PreAuthorize("hasAnyAuthority('business:client:list', 'business:collection:list')")
+    @GetMapping("/{id}/statement")
+    public ApiResult<com.accounting.firm.client.dto.ClientStatementVO> statement(@PathVariable Long id) {
+        return ApiResult.success(clientService.statement(id));
+    }
+
     @AuditLog("登记客户")
     @PreAuthorize("hasAuthority('business:client:add')")
     @PostMapping

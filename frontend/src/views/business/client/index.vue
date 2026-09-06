@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import * as XLSX from 'xlsx'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   pageClients, createClient, updateClient, deleteClient,
   listClientContacts, addClientContact, updateClientContact, deleteClientContact,
 } from '@/api/client'
-import type { ClientContactItem, ClientContactRequest, ClientItem, ClientRequest } from '@/types'
+import { getClientStatement } from '@/api/client'
+import type { ClientContactItem, ClientContactRequest, ClientItem, ClientRequest, ClientStatementVO } from '@/types'
 
 const typeLabels: Record<string, string> = { domestic: '境内', overseas: '境外' }
 const typeTagTypes: Record<string, 'primary' | 'warning'> = { domestic: 'primary', overseas: 'warning' }
@@ -206,6 +208,55 @@ function editFromDetail(): void {
   openEdit(detailClient.value)
 }
 
+/** 导出客户对账单 Excel（汇总/发票/回款 三个 Sheet） */
+const statementLoadingId = ref<number | null>(null)
+async function exportStatement(row: ClientItem): Promise<void> {
+  statementLoadingId.value = row.id
+  try {
+    const st = await getClientStatement(row.id)
+    const money = (v: unknown) => Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
+    const wb = XLSX.utils.book_new()
+
+    const overview = [
+      ['客户对账单'],
+      ['客户编号', st.clientNo],
+      ['客户名称', st.clientName],
+      ['导出日期', new Date().toISOString().slice(0, 10)],
+      [],
+      ['合同总额（元）', money(st.contractTotal)],
+      ['已开票总额（元）', money(st.invoiceIssuedTotal)],
+      ['已回款总额（元）', money(st.collectedTotal)],
+      ['未收余额（元）', money(st.outstanding)],
+    ]
+    const ws1 = XLSX.utils.aoa_to_sheet(overview)
+    XLSX.utils.book_append_sheet(wb, ws1, '汇总')
+
+    const ws2 = XLSX.utils.aoa_to_sheet([
+      ['合同字号', '合同名称', '所属项目', '金额（元）', '状态'],
+      ...st.contracts.map((c) => [c.contractNo, c.name || '', c.projectName || '', Number(c.amount), c.statusLabel]),
+    ])
+    XLSX.utils.book_append_sheet(wb, ws2, '合同')
+
+    const ws3 = XLSX.utils.aoa_to_sheet([
+      ['发票号', '合同字号', '开票日期', '价税合计（元）', '不含税（元）', '税额（元）', '状态'],
+      ...st.invoices.map((i) => [i.invoiceNo, i.contractNo || '', i.invoiceDate || '', Number(i.amount),
+        Number(i.amountExTax ?? 0), Number(i.taxAmount ?? 0), i.statusLabel]),
+    ])
+    XLSX.utils.book_append_sheet(wb, ws3, '发票')
+
+    const ws4 = XLSX.utils.aoa_to_sheet([
+      ['回款日期', '合同字号', '回款金额（元）', '方式'],
+      ...st.payments.map((p) => [p.paymentDate || '', p.contractNo || '', Number(p.amount), p.paymentMethod || '']),
+    ])
+    XLSX.utils.book_append_sheet(wb, ws4, '回款')
+
+    XLSX.writeFile(wb, `对账单_${st.clientName}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    ElMessage.success('对账单已导出')
+  } finally {
+    statementLoadingId.value = null
+  }
+}
+
 async function handleDelete(row: ClientItem): Promise<void> {
   try {
     await ElMessageBox.confirm(`确定删除客户「${row.clientName}」吗？`, '删除确认', { type: 'warning' })
@@ -247,6 +298,7 @@ onMounted(fetchList)
         <el-table-column label="操作" width="170" fixed="right">
           <template #default="{ row }">
             <el-button link type="info" size="small" @click.stop="openDetail(row)">详情</el-button>
+            <el-button link type="primary" size="small" :loading="statementLoadingId === row.id" @click.stop="exportStatement(row)">对账单</el-button>
             <el-button v-if="row.status !== 3" v-permission="'business:client:edit'" link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
             <el-button v-if="row.status !== 3" v-permission="'business:client:delete'" link type="danger" size="small" @click.stop="handleDelete(row)">删除</el-button>
           </template>
