@@ -130,6 +130,9 @@ async function loadContacts(): Promise<void> {
   contactsLoading.value = true
   try {
     contacts.value = await listClientContacts(form.id)
+  } catch {
+    // 后端尚未部署联系人接口等情况：不阻断客户编辑，联系人页签显示为空
+    contacts.value = []
   } finally { contactsLoading.value = false }
 }
 
