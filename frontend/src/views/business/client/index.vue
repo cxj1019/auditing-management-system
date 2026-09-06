@@ -7,7 +7,6 @@ import {
 } from '@/api/client'
 import type { ClientContactItem, ClientContactRequest, ClientItem, ClientRequest } from '@/types'
 
-const clientTypes = ['境内', '境外']
 const typeLabels: Record<string, string> = { domestic: '境内', overseas: '境外' }
 const typeTagTypes: Record<string, 'primary' | 'warning'> = { domestic: 'primary', overseas: 'warning' }
 
@@ -197,7 +196,7 @@ onMounted(fetchList)
         <div class="toolbar-filters">
           <el-input v-model="query.keyword" placeholder="客户编号/名称" clearable style="width: 200px" @keyup.enter="handleSearch" />
           <el-select v-model="query.clientType" placeholder="类型" clearable style="width: 100px; margin-left: 8px">
-            <el-option v-for="t in clientTypes" :key="t" :label="t" :value="t" />
+            <el-option v-for="(label, value) in typeLabels" :key="value" :label="label" :value="value" />
           </el-select>
           <el-button type="primary" style="margin-left: 8px" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
