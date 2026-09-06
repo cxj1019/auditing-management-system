@@ -165,8 +165,8 @@ export interface ProjectRequest {
   partnerName: string
   managerName: string
   siteLeaderName: string
-  startDate: string
-  endDate: string
+  startDate?: string
+  endDate?: string
   remark?: string
 }
 

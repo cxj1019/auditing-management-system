@@ -75,6 +75,25 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
                 ? Map.of()
                 : projectMapper.selectBatchIds(projectIds).stream()
                         .collect(Collectors.toMap(Project::getId, Function.identity()));
+        // 开票/收款关联场景屏蔽已归档项目的合同，并按项目归属部门隔离
+        var scope = dataScopeService.currentScope();
+        contracts = contracts.stream().filter(c -> {
+            Project p = projectMap.get(c.getProjectId());
+            if (p == null) {
+                return false;
+            }
+            if (p.getStatus() != null && p.getStatus() == com.accounting.firm.project.entity.ProjectStatus.ARCHIVED.getCode()) {
+                return false;
+            }
+            return switch (scope.type()) {
+                case DEPT -> scope.deptId().equals(p.getDeptId());
+                case SELF -> scope.username().equals(c.getCreateBy());
+                default -> true;
+            };
+        }).toList();
+        if (contracts.isEmpty()) {
+            return List.of();
+        }
         List<Long> clientIds = projectMap.values().stream()
                 .map(Project::getClientId).filter(Objects::nonNull).filter(id -> id > 0).distinct().toList();
         Map<Long, Client> clientMap = clientIds.isEmpty()

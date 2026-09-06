@@ -173,6 +173,10 @@ function openEdit(row: ProjectItem): void {
 async function handleSave(): Promise<void> {
   if (!form.clientId) { ElMessage.warning('请选择客户'); return }
   if (!form.deptId) { ElMessage.warning('请选择归属部门'); return }
+  if (form.startDate && form.endDate && form.startDate > form.endDate) {
+    ElMessage.warning('项目开始日期不能晚于结束日期')
+    return
+  }
   saving.value = true
   try {
     if (isEdit.value) {
@@ -414,10 +418,10 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="项目期间" required>
-          <el-date-picker v-model="form.startDate" type="date" value-format="YYYY-MM-DD" placeholder="开始日期" style="width: 48%" />
+        <el-form-item label="项目期间">
+          <el-date-picker v-model="form.startDate" type="date" value-format="YYYY-MM-DD" placeholder="开始日期（可选）" style="width: 48%" />
           <span style="margin: 0 4px">至</span>
-          <el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" placeholder="结束日期" style="width: 48%" />
+          <el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" placeholder="结束日期（可选）" style="width: 48%" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" placeholder="备注（可选）" />

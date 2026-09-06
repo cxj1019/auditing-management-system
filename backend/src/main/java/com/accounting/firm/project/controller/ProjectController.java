@@ -49,8 +49,9 @@ public class ProjectController {
         return ApiResult.success(projectService.pageProjects(current, size, status, type, keyword, startDate, endDate));
     }
 
-    /** 项目下拉选项：全部非归档项目，不做部门隔离（报销等成本归集场景需要跨部门关联项目） */
-    @PreAuthorize("hasAnyAuthority('business:project:list', 'business:reimbursement:add')")
+    /** 项目下拉选项：非归档项目、按归属部门隔离（报销/合同/日程/函证等新增场景关联项目用） */
+    @PreAuthorize("hasAnyAuthority('business:project:list', 'business:reimbursement:add', "
+            + "'business:contract:add', 'business:confirmation:add', 'business:schedule:add')")
     @GetMapping("/options")
     public ApiResult<List<ProjectOptionVO>> options() {
         return ApiResult.success(projectService.listOptions());

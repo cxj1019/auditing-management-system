@@ -52,10 +52,9 @@ public class ProjectRequest {
     @Size(max = 50, message = "项目现场负责人长度不能超过 50")
     private String siteLeaderName;
 
-    @NotNull(message = "项目开始日期不能为空")
+    /** 项目期间起止（可选；两者都填时校验先后顺序） */
     private LocalDate startDate;
 
-    @NotNull(message = "项目结束日期不能为空")
     private LocalDate endDate;
 
     @Size(max = 500, message = "备注长度不能超过 500")

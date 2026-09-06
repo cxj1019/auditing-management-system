@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listSchedules, createSchedule, updateSchedule, deleteSchedule, exitSchedule, getHoursSummary } from '@/api/schedule'
-import { pageProjects } from '@/api/project'
+import { projectOptions as projectOptionsApi } from '@/api/project'
 import { getUserOptions, getDepartmentOptions } from '@/api/user'
 import { useUserStore } from '@/stores/user'
 import { holidayOf, isHoliday, isMakeupWorkday } from '@/utils/holiday'
@@ -419,12 +419,13 @@ const projectOptions = ref<{ id: number; name: string }[]>([])
 
 async function loadOptions(): Promise<void> {
   const [pData, uData, dData] = await Promise.all([
-    pageProjects({ current: 1, size: 200 }),
+    // 专用选项接口：非归档项目、按归属部门隔离
+    projectOptionsApi(),
     getUserOptions(),
     // 用免权限的 /departments/options，普通员工也能打开本页
     getDepartmentOptions(),
   ])
-  projectOptions.value = pData.records
+  projectOptions.value = pData
   userOptions.value = uData
   deptOptions.value = dData
 }

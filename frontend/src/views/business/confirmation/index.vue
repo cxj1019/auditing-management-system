@@ -16,7 +16,7 @@ import {
   trackConfirmationLogistics,
 } from '@/api/confirmation'
 import AttachmentLink from '@/components/AttachmentLink.vue'
-import { pageProjects } from '@/api/project'
+import { projectOptions as projectOptionsApi } from '@/api/project'
 import type {
   ConfirmationAttachmentItem,
   ConfirmationItem,
@@ -50,8 +50,8 @@ const query = reactive({
 const projectOptions = ref<ProjectItem[]>([])
 
 async function loadProjectOptions(): Promise<void> {
-  const data = await pageProjects({ current: 1, size: 200 })
-  projectOptions.value = data.records
+  // 专用选项接口：非归档项目、按归属部门隔离
+  projectOptions.value = await projectOptionsApi()
 }
 
 async function fetchList(): Promise<void> {

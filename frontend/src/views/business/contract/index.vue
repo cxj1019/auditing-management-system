@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
-import { pageProjects } from '@/api/project'
+import { projectOptions as projectOptionsApi } from '@/api/project'
 import { listBusinessTypes } from '@/api/businessType'
 import { getBocRates } from '@/api/exchangeRate'
 import { getUserOptions } from '@/api/user'
@@ -151,8 +151,8 @@ const selectedProjectClient = computed(() =>
   projectOptions.value.find((p) => p.id === form.projectId)?.clientName || '')
 
 async function loadProjectOptions(): Promise<void> {
-  const data = await pageProjects({ current: 1, size: 200, status: 0 })
-  projectOptions.value = data.records
+  // 专用选项接口：非归档项目、按归属部门隔离
+  projectOptions.value = await projectOptionsApi()
 }
 
 async function loadUserOptions(): Promise<void> {

@@ -203,9 +203,10 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         }
     }
 
-    /** 项目期间校验：开始不得晚于结束 */
+    /** 项目期间校验：两者都填时开始不得晚于结束（允许不填） */
     private void validateDates(ProjectRequest request) {
-        if (request.getStartDate().isAfter(request.getEndDate())) {
+        if (request.getStartDate() != null && request.getEndDate() != null
+                && request.getStartDate().isAfter(request.getEndDate())) {
             throw new BusinessException("项目开始日期不能晚于结束日期");
         }
     }
