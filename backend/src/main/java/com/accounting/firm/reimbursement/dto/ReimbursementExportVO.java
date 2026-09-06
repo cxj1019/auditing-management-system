@@ -30,6 +30,12 @@ public class ReimbursementExportVO {
     private String invoiceNumber;
 
     private Boolean isVatInvoice;
+    /** 发票类型：none/vat_general/vat_special */
+    private String invoiceType;
+    /** 税率（%） */
+    private java.math.BigDecimal taxRate;
+    /** 明细行归集项目（行项目优先，单头兜底） */
+    private Long itemProjectId;
 
     /** 单据状态文本 */
     private String statusLabel;

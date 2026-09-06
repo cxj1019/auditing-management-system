@@ -21,13 +21,15 @@ public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
                    i.category AS item_category, i.amount AS item_amount,
                    i.expense_date AS item_expense_date, i.description AS item_description,
                    i.invoice_number, i.is_vat_invoice,
+                   i.invoice_type, i.tax_rate,
+                   COALESCE(i.project_id, r.project_id) AS item_project_id,
                    CASE r.status
                        WHEN 0 THEN '草稿' WHEN 1 THEN '待审批' WHEN 2 THEN '已批准'
                        WHEN 3 THEN '已驳回' WHEN 4 THEN '待终审' ELSE '未知' END AS status_label,
                    r.approver_name
             FROM reimbursement r
             JOIN reimbursement_item i ON i.reimbursement_id = r.id
-            LEFT JOIN project p ON p.id = r.project_id
+            LEFT JOIN project p ON p.id = COALESCE(i.project_id, r.project_id)
             <where>
                 <if test="startDate != null">AND i.expense_date &gt;= #{startDate}</if>
                 <if test="endDate != null">AND i.expense_date &lt;= #{endDate}</if>

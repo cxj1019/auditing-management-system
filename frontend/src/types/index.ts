@@ -514,6 +514,10 @@ export interface ReimbursementItemData {
   description?: string
   invoiceNumber?: string
   isVatInvoice?: boolean
+  /** 发票类型：none-不涉及 vat_general-增值税普通发票 vat_special-增值税专用发票 */
+  invoiceType?: string
+  /** 税率（%，专票必填） */
+  taxRate?: number
   projectId?: number
   billable?: boolean
 }
@@ -587,6 +591,8 @@ export interface ReimbursementExportItem {
   itemDescription?: string
   invoiceNumber?: string
   isVatInvoice?: boolean
+  invoiceType?: string
+  taxRate?: number
   statusLabel: string
   approverName?: string
 }

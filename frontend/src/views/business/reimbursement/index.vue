@@ -39,6 +39,9 @@ import type {
 const userStore = useUserStore()
 // 费用类别字典（系统管理员可在类别设置中增删改）
 const FALLBACK_CATEGORIES = ['差旅费', '交通费', '办公费', '餐饮费', '其他']
+const invoiceTypeLabels: Record<string, string> = {
+  none: '不涉及', vat_general: '增值税普票', vat_special: '增值税专票',
+}
 const categories = ref<string[]>([...FALLBACK_CATEGORIES])
 
 async function loadCategories(): Promise<void> {
@@ -184,11 +187,18 @@ const projectOptions = ref<ProjectItem[]>([])
 
 function emptyItem(): ReimbursementItemData {
   // 新行默认继承单头"关联项目"，可按行改成其他项目（跨项目费用分摊）
-  return { category: categories.value[0] || '其他', amount: 0, expenseDate: new Date().toISOString().slice(0, 10), description: '', invoiceNumber: '', isVatInvoice: false, projectId: form.projectId ?? undefined, billable: false }
+  return { category: categories.value[0] || '其他', amount: 0, expenseDate: new Date().toISOString().slice(0, 10), description: '', invoiceNumber: '', invoiceType: 'none', taxRate: undefined, projectId: form.projectId ?? undefined, billable: false }
 }
 
 function addItem(): void {
   form.items.push(emptyItem())
+}
+
+/** 发票类型切换：不涉及时清空税率 */
+function onInvoiceTypeChange(row: ReimbursementItemData): void {
+  if (row.invoiceType === 'none') {
+    row.taxRate = undefined
+  }
 }
 
 function removeItem(index: number): void {
@@ -239,6 +249,11 @@ async function handleSave(): Promise<void> {
     ElMessage.warning('至少需要一条费用明细')
     return
   }
+  const noRate = form.items.find((i) => i.invoiceType === 'vat_special' && !(i.taxRate && i.taxRate > 0))
+  if (noRate) {
+    ElMessage.warning(`增值税专用发票的明细「${noRate.category}」必须填写税率`)
+    return
+  }
   saving.value = true
   try {
     if (isEdit.value && editingId.value) {
@@ -269,6 +284,8 @@ async function syncItemIds(billId: number): Promise<void> {
     description: i.description || '',
     invoiceNumber: i.invoiceNumber || '',
     isVatInvoice: !!i.isVatInvoice,
+    invoiceType: i.invoiceType || 'none',
+    taxRate: i.taxRate ?? undefined,
     projectId: i.projectId ?? undefined,
     billable: !!i.billable,
   }))
@@ -387,7 +404,7 @@ const drawerVisible = ref(false)
 const detail = ref<ReimbursementItem | null>(null)
 const detailLoading = ref(false)
 const detailAttachments = ref<ReimbursementAttachmentItem[]>([])
-const detailItems = ref<{ id: number; category: string; amount: number; expenseDate: string; description?: string; invoiceNumber?: string; isVatInvoice?: boolean; projectId?: number; billable?: boolean }[]>([])
+const detailItems = ref<{ id: number; category: string; amount: number; expenseDate: string; description?: string; invoiceNumber?: string; isVatInvoice?: boolean; invoiceType?: string; taxRate?: number; projectId?: number; billable?: boolean }[]>([])
 
 function detailItemAtts(itemId?: number): ReimbursementAttachmentItem[] {
   if (!itemId) return []
@@ -478,11 +495,11 @@ async function handleExportExcel(): Promise<void> {
       return
     }
     const aoa = [
-      ['报销编号', '申请人', '项目', '报销标题', '费用类别', '金额（元）', '费用日期', '事由说明', '发票号', '增值税发票', '单据状态', '审批人'],
+      ['报销编号', '申请人', '项目', '报销标题', '费用类别', '金额（元）', '费用日期', '事由说明', '发票号', '发票类型', '税率（%）', '单据状态', '审批人'],
       ...rows.map((r) => [
         r.reimbursementNo, r.applicantName || '', r.projectName || '', r.title,
         r.itemCategory, Number(r.itemAmount), r.itemExpenseDate, r.itemDescription || '',
-        r.invoiceNumber || '', r.isVatInvoice ? '是' : '否', r.statusLabel, r.approverName || '',
+        r.invoiceNumber || '', invoiceTypeLabels[r.invoiceType || 'none'] || '不涉及', r.taxRate ?? '', r.statusLabel, r.approverName || '',
       ]),
     ]
     const ws = XLSX.utils.aoa_to_sheet(aoa)
@@ -678,9 +695,19 @@ function makeDetailRowUploader(itemId: number) {
               <el-input v-model="row.invoiceNumber" size="small" maxlength="50" />
             </template>
           </el-table-column>
-          <el-table-column label="增值税票" width="90" align="center">
+          <el-table-column label="发票类型" width="130">
             <template #default="{ row }">
-              <el-checkbox v-model="row.isVatInvoice" />
+              <el-select v-model="row.invoiceType" size="small" @change="onInvoiceTypeChange(row)">
+                <el-option label="不涉及" value="none" />
+                <el-option label="增值税普票" value="vat_general" />
+                <el-option label="增值税专票" value="vat_special" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="税率（%）" width="110" align="right">
+            <template #default="{ row }">
+              <el-input-number v-model="row.taxRate" size="small" :min="0" :max="100" :precision="2" :step="1"
+                :disabled="row.invoiceType === 'none'" style="width: 100%" />
             </template>
           </el-table-column>
           <el-table-column width="100" align="center">
@@ -826,8 +853,11 @@ function makeDetailRowUploader(itemId: number) {
             <el-table-column prop="expenseDate" label="费用日期" width="110" />
             <el-table-column prop="description" label="事由说明" min-width="140" show-overflow-tooltip />
             <el-table-column prop="invoiceNumber" label="发票号" width="100" />
-            <el-table-column label="增值税" width="70" align="center">
-              <template #default="{ row }">{{ row.isVatInvoice ? '是' : '否' }}</template>
+            <el-table-column label="发票类型" width="100" align="center">
+              <template #default="{ row }">{{ invoiceTypeLabels[row.invoiceType || 'none'] || '不涉及' }}</template>
+            </el-table-column>
+            <el-table-column label="税率" width="70" align="center">
+              <template #default="{ row }">{{ row.taxRate != null ? row.taxRate + '%' : '—' }}</template>
             </el-table-column>
             <el-table-column label="归集项目" min-width="140" show-overflow-tooltip>
               <template #default="{ row }">

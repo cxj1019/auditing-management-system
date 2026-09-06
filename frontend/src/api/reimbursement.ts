@@ -23,7 +23,7 @@ export function createReimbursement(data: ReimbursementRequest): Promise<number>
 }
 
 /** 查询报销单明细行清单 */
-export function getReimbItems(id: number): Promise<{ id: number; category: string; amount: number; expenseDate: string; description?: string; invoiceNumber?: string; isVatInvoice?: boolean; projectId?: number; billable?: boolean }[]> {
+export function getReimbItems(id: number): Promise<{ id: number; category: string; amount: number; expenseDate: string; description?: string; invoiceNumber?: string; isVatInvoice?: boolean; invoiceType?: string; taxRate?: number; projectId?: number; billable?: boolean }[]> {
   return request.get(`/reimbursements/${id}/items`)
 }
 

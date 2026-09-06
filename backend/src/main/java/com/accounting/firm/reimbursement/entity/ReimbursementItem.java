@@ -41,8 +41,14 @@ public class ReimbursementItem implements Serializable {
     /** 发票号（可选） */
     private String invoiceNumber;
 
-    /** 是否增值税发票 */
+    /** 是否增值税发票（由发票类型同步：非 none 即 true，保留兼容导出） */
     private Boolean isVatInvoice;
+
+    /** 发票类型：none-不涉及 vat_general-增值税普通发票 vat_special-增值税专用发票 */
+    private String invoiceType;
+
+    /** 税率（%，增值税专用发票必填） */
+    private BigDecimal taxRate;
 
     /** 归集项目 ID（可空；未填时按单头 project_id 归集成本） */
     private Long projectId;

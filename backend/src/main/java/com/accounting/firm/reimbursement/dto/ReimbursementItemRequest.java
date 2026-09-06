@@ -36,8 +36,14 @@ public class ReimbursementItemRequest {
     @Size(max = 50, message = "发票号长度不能超过 50")
     private String invoiceNumber;
 
-    /** 是否增值税发票 */
+    /** 是否增值税发票（由发票类型推导，入参可忽略） */
     private Boolean isVatInvoice = false;
+
+    /** 发票类型：none-不涉及 vat_general-增值税普通发票 vat_special-增值税专用发票 */
+    private String invoiceType = "none";
+
+    /** 税率（%，增值税专用发票必填） */
+    private BigDecimal taxRate;
 
     /** 归集项目 ID（可空；未填按单头项目归集） */
     private Long projectId;

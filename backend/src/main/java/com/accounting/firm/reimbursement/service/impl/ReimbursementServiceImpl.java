@@ -142,6 +142,15 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         if (itemCount == 0) {
             throw new BusinessException("至少需要一条费用明细才能提交");
         }
+        // 增值税专用发票必须填写税率
+        List<ReimbursementItem> items = itemMapper.selectList(new LambdaQueryWrapper<ReimbursementItem>()
+                .eq(ReimbursementItem::getReimbursementId, id));
+        for (ReimbursementItem item : items) {
+            if ("vat_special".equals(item.getInvoiceType())
+                    && (item.getTaxRate() == null || item.getTaxRate().signum() <= 0)) {
+                throw new BusinessException("明细「%s」为增值税专用发票，必须填写税率".formatted(item.getCategory()));
+            }
+        }
         recalculateTotal(id);
         ReimbursementStatus current = ReimbursementStatus.of(bill.getStatus());
         current.submit();
@@ -346,7 +355,9 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
             item.setExpenseDate(ir.getExpenseDate());
             item.setDescription(ir.getDescription());
             item.setInvoiceNumber(ir.getInvoiceNumber());
-            item.setIsVatInvoice(Boolean.TRUE.equals(ir.getIsVatInvoice()));
+            item.setInvoiceType(StringUtils.hasText(ir.getInvoiceType()) ? ir.getInvoiceType() : "none");
+            item.setIsVatInvoice(!"none".equals(item.getInvoiceType()));
+            item.setTaxRate(ir.getTaxRate());
             item.setProjectId(ir.getProjectId());
             item.setBillable(Boolean.TRUE.equals(ir.getBillable()));
             if (item.getId() == null) {
