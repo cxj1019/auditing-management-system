@@ -28,6 +28,45 @@ import org.springframework.web.bind.annotation.RestController;
 public class ClientController {
 
     private final ClientService clientService;
+    private final com.accounting.firm.client.service.ClientContactService clientContactService;
+
+    /** 客户联系人清单 */
+    @PreAuthorize("hasAnyAuthority('business:client:list', 'business:client:edit', 'business:client:add')")
+    @GetMapping("/{clientId}/contacts")
+    public ApiResult<java.util.List<com.accounting.firm.client.entity.ClientContact>> contacts(
+            @PathVariable Long clientId) {
+        return ApiResult.success(clientContactService.listByClientId(clientId));
+    }
+
+    /** 新增联系人 */
+    @AuditLog("新增客户联系人")
+    @PreAuthorize("hasAnyAuthority('business:client:edit', 'business:client:add')")
+    @PostMapping("/{clientId}/contacts")
+    public ApiResult<com.accounting.firm.client.entity.ClientContact> addContact(
+            @PathVariable Long clientId,
+            @Valid @RequestBody com.accounting.firm.client.dto.ClientContactRequest request) {
+        return ApiResult.success(clientContactService.addContact(clientId, request));
+    }
+
+    /** 编辑联系人 */
+    @AuditLog("编辑客户联系人")
+    @PreAuthorize("hasAnyAuthority('business:client:edit', 'business:client:add')")
+    @PutMapping("/{clientId}/contacts/{contactId}")
+    public ApiResult<com.accounting.firm.client.entity.ClientContact> updateContact(
+            @PathVariable Long clientId,
+            @PathVariable Long contactId,
+            @Valid @RequestBody com.accounting.firm.client.dto.ClientContactRequest request) {
+        return ApiResult.success(clientContactService.updateContact(contactId, request));
+    }
+
+    /** 删除联系人 */
+    @AuditLog("删除客户联系人")
+    @PreAuthorize("hasAnyAuthority('business:client:edit', 'business:client:add', 'business:client:delete')")
+    @DeleteMapping("/{clientId}/contacts/{contactId}")
+    public ApiResult<Void> deleteContact(@PathVariable Long clientId, @PathVariable Long contactId) {
+        clientContactService.deleteContact(clientId, contactId);
+        return ApiResult.success();
+    }
 
     @PreAuthorize("hasAuthority('business:client:list')")
     @GetMapping

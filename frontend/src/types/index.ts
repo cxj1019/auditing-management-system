@@ -223,6 +223,26 @@ export interface ClientRequest {
   remark?: string
 }
 
+/** 客户联系人 */
+export interface ClientContactItem {
+  id: number
+  clientId: number
+  contactName: string
+  position?: string
+  phone?: string
+  email?: string
+  remark?: string
+}
+
+/** 客户联系人创建/编辑请求 */
+export interface ClientContactRequest {
+  contactName: string
+  position?: string
+  phone?: string
+  email?: string
+  remark?: string
+}
+
 /** 日程 */
 export interface ScheduleItem {
   id: number
