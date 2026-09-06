@@ -95,7 +95,16 @@ function onAmountChange(): void {
   deriveTaxByAmount()
 }
 
-/** 不含税金额/税率变化：税额 = 不含税 × 税率，价税合计 = 不含税 + 税额 */
+/** 税率变化：以不含税金额为主输入重算；仅有含税金额时反拆 */
+function onTaxRateChange(): void {
+  if (form.amountExTax != null && form.amountExTax > 0) {
+    onAmountExTaxChange()
+  } else {
+    deriveTaxByAmount()
+  }
+}
+
+/** 不含税金额变化：税额 = 不含税 × 税率，含税金额 = 不含税 + 税额（税率未填则含税=不含税） */
 function onAmountExTaxChange(): void {
   if (form.amountExTax == null || form.amountExTax <= 0) return
   const tax = form.taxRate == null ? 0 : round2((form.amountExTax * form.taxRate) / 100)
@@ -254,6 +263,14 @@ function openEdit(row: ContractItem): void {
 }
 
 async function handleSave(): Promise<void> {
+  if (!form.amountExTax && !(form.amount && form.amount > 0)) {
+    ElMessage.warning('请填写合同金额（不含税）')
+    return
+  }
+  // 兜底：不含税金额已填但含税金额未联动时，按税率补算
+  if ((!form.amount || form.amount <= 0) && form.amountExTax) {
+    onAmountExTaxChange()
+  }
   saving.value = true
   try {
     // 服务期间未填的字段归一化为 undefined(未约定期间);非外币时清空外币字段
@@ -409,14 +426,14 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
             <span v-else style="color: #9ca3af">人民币</span>
           </template>
         </el-table-column>
-        <el-table-column label="合同金额（含税，元）" min-width="140" align="right">
-          <template #default="{ row }">{{ Number(row.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</template>
+        <el-table-column label="合同金额（不含税，元）" min-width="140" align="right">
+          <template #default="{ row }">{{ row.amountExTax != null ? Number(row.amountExTax).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) : '—' }}</template>
         </el-table-column>
         <el-table-column label="税率" width="80" align="center">
           <template #default="{ row }">{{ row.taxRate != null ? row.taxRate + '%' : '—' }}</template>
         </el-table-column>
-        <el-table-column label="不含税金额（元）" min-width="130" align="right">
-          <template #default="{ row }">{{ row.amountExTax != null ? Number(row.amountExTax).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) : '—' }}</template>
+        <el-table-column label="含税金额（元）" min-width="130" align="right">
+          <template #default="{ row }">{{ Number(row.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</template>
         </el-table-column>
         <el-table-column prop="keeperName" label="合同保管人" width="110" />
         <el-table-column prop="signDate" label="签约日期" width="110" />
@@ -507,14 +524,17 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="合同金额（含税）" required>
-          <el-input-number v-model="form.amount" :min="0.01" :precision="2" :step="1000" style="width: 100%" @change="onAmountChange" />
+        <el-form-item label="合同金额（不含税）" required>
+          <el-input-number v-model="form.amountExTax" :min="0.01" :precision="2" :step="1000" style="width: 100%" @change="onAmountExTaxChange" />
         </el-form-item>
         <el-form-item label="税率（%）">
-          <el-input-number v-model="form.taxRate" :min="0" :max="100" :precision="2" :step="1" style="width: 100%" placeholder="可空" @change="deriveTaxByAmount" />
+          <el-input-number v-model="form.taxRate" :min="0" :max="100" :precision="2" :step="1" style="width: 100%" placeholder="可空，不填则不含税=含税" @change="onTaxRateChange" />
         </el-form-item>
-        <el-form-item label="不含税金额">
-          <el-input-number v-model="form.amountExTax" :min="0" :precision="2" :step="1000" style="width: 100%" @change="onAmountExTaxChange" />
+        <el-form-item label="含税金额">
+          <el-input-number v-model="form.amount" :min="0" :precision="2" :step="1000" style="width: 100%" @change="onAmountChange" />
+        </el-form-item>
+        <el-form-item label="税额">
+          <el-input-number v-model="form.taxAmount" :min="0" :precision="2" :step="1000" style="width: 100%" @change="onTaxAmountChange" />
         </el-form-item>
         <el-form-item label="税额">
           <el-input-number v-model="form.taxAmount" :min="0" :precision="2" :step="1000" style="width: 100%" @change="onTaxAmountChange" />
