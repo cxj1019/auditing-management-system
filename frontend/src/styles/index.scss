@@ -37,3 +37,20 @@ a {
   justify-content: flex-end;
   margin-top: 12px;
 }
+
+/* ---------- 弹窗/抽屉自适应视口 ----------
+ * 所有 el-dialog / el-drawer 限制最大宽度不超过视口，
+ * 小屏幕自动收缩，避免横向滚动条；内容超出时在弹窗内部滚动 */
+.el-dialog {
+  max-width: calc(100vw - 24px);
+}
+
+.el-drawer {
+  max-width: calc(100vw - 24px);
+}
+
+/* 弹窗内表格过宽时在表体内横向滚动，不撑破弹窗 */
+.el-dialog .el-table,
+.el-drawer .el-table {
+  max-width: 100%;
+}
