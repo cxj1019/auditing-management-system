@@ -26,6 +26,9 @@ public interface CostAnalysisService extends IService<LaborCost> {
     /** 经营概览统计 */
     OverviewVO overview();
 
+    /** 近 12 个月经营趋势：收入/报销成本/人工成本按月 */
+    List<java.util.Map<String, Object>> monthlyTrend();
+
     /** 员工费用统计：已批准报销按 申请人×类别 汇总（year 可空=全部年份） */
     List<com.accounting.firm.cost.dto.ExpenseStatVO> expenseStats(Integer year);
 

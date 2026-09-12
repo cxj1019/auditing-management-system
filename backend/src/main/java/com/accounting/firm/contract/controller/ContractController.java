@@ -50,6 +50,44 @@ public class ContractController {
                 contractService.pageContracts(current, size, name, clientName, ownerName, status));
     }
 
+    // ---------- 收款计划 ----------
+
+    /** 收款计划节点清单 */
+    @PreAuthorize("hasAuthority('business:contract:list')")
+    @GetMapping("/{id}/payment-plans")
+    public ApiResult<List<com.accounting.firm.contract.dto.PaymentPlanVO>> listPaymentPlans(@PathVariable Long id) {
+        return ApiResult.success(contractService.listPaymentPlans(id));
+    }
+
+    /** 新增收款计划节点 */
+    @AuditLog("新增收款计划")
+    @PreAuthorize("hasAuthority('business:contract:edit')")
+    @PostMapping("/{id}/payment-plans")
+    public ApiResult<com.accounting.firm.contract.dto.PaymentPlanVO> addPaymentPlan(
+            @PathVariable Long id,
+            @Valid @RequestBody com.accounting.firm.contract.dto.PaymentPlanRequest request) {
+        return ApiResult.success(contractService.addPaymentPlan(id, request));
+    }
+
+    /** 编辑收款计划节点 */
+    @AuditLog("编辑收款计划")
+    @PreAuthorize("hasAuthority('business:contract:edit')")
+    @PutMapping("/{id}/payment-plans/{planId}")
+    public ApiResult<Void> updatePaymentPlan(@PathVariable Long id, @PathVariable Long planId,
+                                             @Valid @RequestBody com.accounting.firm.contract.dto.PaymentPlanRequest request) {
+        contractService.updatePaymentPlan(id, planId, request);
+        return ApiResult.success();
+    }
+
+    /** 删除收款计划节点 */
+    @AuditLog("删除收款计划")
+    @PreAuthorize("hasAuthority('business:contract:edit')")
+    @DeleteMapping("/{id}/payment-plans/{planId}")
+    public ApiResult<Void> deletePaymentPlan(@PathVariable Long id, @PathVariable Long planId) {
+        contractService.deletePaymentPlan(id, planId);
+        return ApiResult.success();
+    }
+
     /** 创建合同 */
     @AuditLog("新增合同")
     @PreAuthorize("hasAuthority('business:contract:add')")

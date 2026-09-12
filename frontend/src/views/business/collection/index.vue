@@ -406,6 +406,9 @@ onMounted(() => {
             <el-table-column label="已收合计（元）" min-width="130" align="right">
               <template #default="{ row }">{{ money(row.totalCollected) }}</template>
             </el-table-column>
+            <el-table-column label="收款计划（元）" min-width="120" align="right">
+              <template #default="{ row }">{{ Number(row.plannedTotal || 0) > 0 ? money(row.plannedTotal) : '—' }}</template>
+            </el-table-column>
             <el-table-column label="未收余额（元）" min-width="130" align="right">
               <template #default="{ row }">
                 <span :style="{ color: Number(row.outstanding) <= 0 ? '#67c23a' : '#f56c6c' }">

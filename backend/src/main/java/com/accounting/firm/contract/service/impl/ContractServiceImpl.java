@@ -27,6 +27,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -49,12 +50,14 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
     private final DataScopeService dataScopeService;
     private final ContractNoTypeMapper contractNoTypeMapper;
     private final BusinessTypeMapper businessTypeMapper;
+    private final com.accounting.firm.contract.mapper.ContractPaymentPlanMapper paymentPlanMapper;
     private final com.accounting.firm.invoice.mapper.InvoiceMapper invoiceMapper;
     private final com.accounting.firm.collection.mapper.ContractPaymentMapper paymentMapper;
 
     public ContractServiceImpl(ProjectMapper projectMapper, ClientMapper clientMapper,
                                DataScopeService dataScopeService, ContractNoTypeMapper contractNoTypeMapper,
                                BusinessTypeMapper businessTypeMapper,
+                               com.accounting.firm.contract.mapper.ContractPaymentPlanMapper paymentPlanMapper,
                                com.accounting.firm.invoice.mapper.InvoiceMapper invoiceMapper,
                                com.accounting.firm.collection.mapper.ContractPaymentMapper paymentMapper) {
         this.projectMapper = projectMapper;
@@ -62,6 +65,7 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
         this.dataScopeService = dataScopeService;
         this.contractNoTypeMapper = contractNoTypeMapper;
         this.businessTypeMapper = businessTypeMapper;
+        this.paymentPlanMapper = paymentPlanMapper;
         this.invoiceMapper = invoiceMapper;
         this.paymentMapper = paymentMapper;
     }
@@ -414,5 +418,82 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
         contract.setServiceEnd(request.getServiceEnd());
         contract.setKeeperName(request.getKeeperName());
         contract.setRemark(request.getRemark());
+    }
+
+    // ---------- 收款计划 ----------
+
+    @Override
+    public List<com.accounting.firm.contract.dto.PaymentPlanVO> listPaymentPlans(Long contractId) {
+        List<com.accounting.firm.contract.dto.PaymentPlanVO> rows = paymentPlanMapper.selectList(
+                        new LambdaQueryWrapper<com.accounting.firm.contract.entity.ContractPaymentPlan>()
+                                .eq(com.accounting.firm.contract.entity.ContractPaymentPlan::getContractId, contractId)
+                                .orderByAsc(com.accounting.firm.contract.entity.ContractPaymentPlan::getDueDate))
+                .stream().map(plan -> {
+                    var vo = new com.accounting.firm.contract.dto.PaymentPlanVO();
+                    vo.setId(plan.getId());
+                    vo.setContractId(plan.getContractId());
+                    vo.setDueDate(plan.getDueDate());
+                    vo.setAmount(plan.getAmount());
+                    vo.setRemark(plan.getRemark());
+                    return vo;
+                }).toList();
+        BigDecimal collected = paymentMapper.selectList(
+                        new LambdaQueryWrapper<com.accounting.firm.collection.entity.ContractPayment>()
+                                .eq(com.accounting.firm.collection.entity.ContractPayment::getContractId, contractId))
+                .stream().map(p -> p.getAmount() == null ? BigDecimal.ZERO : p.getAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        rows.forEach(vo -> vo.setContractCollected(collected));
+        return rows;
+    }
+
+    @Override
+    public com.accounting.firm.contract.dto.PaymentPlanVO addPaymentPlan(Long contractId,
+            com.accounting.firm.contract.dto.PaymentPlanRequest request) {
+        if (getById(contractId) == null) {
+            throw new BusinessException("合同不存在");
+        }
+        var plan = new com.accounting.firm.contract.entity.ContractPaymentPlan();
+        plan.setContractId(contractId);
+        plan.setDueDate(request.getDueDate());
+        plan.setAmount(request.getAmount());
+        plan.setRemark(request.getRemark());
+        try {
+            paymentPlanMapper.insert(plan);
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            throw new BusinessException("已存在相同日期与金额的收款计划节点");
+        }
+        var vo = new com.accounting.firm.contract.dto.PaymentPlanVO();
+        vo.setId(plan.getId());
+        vo.setContractId(plan.getContractId());
+        vo.setDueDate(plan.getDueDate());
+        vo.setAmount(plan.getAmount());
+        vo.setRemark(plan.getRemark());
+        return vo;
+    }
+
+    @Override
+    public void updatePaymentPlan(Long contractId, Long planId,
+            com.accounting.firm.contract.dto.PaymentPlanRequest request) {
+        var plan = paymentPlanMapper.selectById(planId);
+        if (plan == null || !plan.getContractId().equals(contractId)) {
+            throw new BusinessException("收款计划节点不存在");
+        }
+        plan.setDueDate(request.getDueDate());
+        plan.setAmount(request.getAmount());
+        plan.setRemark(request.getRemark());
+        try {
+            paymentPlanMapper.updateById(plan);
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            throw new BusinessException("已存在相同日期与金额的收款计划节点");
+        }
+    }
+
+    @Override
+    public void deletePaymentPlan(Long contractId, Long planId) {
+        var plan = paymentPlanMapper.selectById(planId);
+        if (plan == null || !plan.getContractId().equals(contractId)) {
+            throw new BusinessException("收款计划节点不存在");
+        }
+        paymentPlanMapper.deleteById(planId);
     }
 }

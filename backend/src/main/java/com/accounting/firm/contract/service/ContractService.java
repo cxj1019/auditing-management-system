@@ -30,6 +30,22 @@ public interface ContractService extends IService<Contract> {
     /** 状态流转（受状态机约束） */
     void changeStatus(Long id, Integer targetStatus);
 
-    /** 删除合同（仅草稿可删） */
+    /** 删除合同（草稿与已终止可删，有发票/收款关联时阻断） */
     void deleteContract(Long id);
+
+    // ---------- 收款计划 ----------
+
+    /** 收款计划节点清单（按日期排序，附合同已收金额） */
+    List<com.accounting.firm.contract.dto.PaymentPlanVO> listPaymentPlans(Long contractId);
+
+    /** 新增收款计划节点 */
+    com.accounting.firm.contract.dto.PaymentPlanVO addPaymentPlan(Long contractId,
+                                                                  com.accounting.firm.contract.dto.PaymentPlanRequest request);
+
+    /** 编辑收款计划节点 */
+    void updatePaymentPlan(Long contractId, Long planId,
+                           com.accounting.firm.contract.dto.PaymentPlanRequest request);
+
+    /** 删除收款计划节点 */
+    void deletePaymentPlan(Long contractId, Long planId);
 }

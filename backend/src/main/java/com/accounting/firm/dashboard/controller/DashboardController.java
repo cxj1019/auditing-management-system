@@ -155,6 +155,42 @@ public class DashboardController {
         return ApiResult.success(vo);
     }
 
+    /** 数据体检：待补全/待处理的数据项(管理员与合伙人体视角含全局项,员工仅本人草稿) */
+    @GetMapping("/health-check")
+    public ApiResult<List<java.util.Map<String, Object>>> healthCheck(@AuthenticationPrincipal SecurityUser user) {
+        List<java.util.Map<String, Object>> items = new java.util.ArrayList<>();
+        boolean globalViewer = user.hasRole("admin") || user.hasRole("manager") || user.hasRole("partner");
+        if (globalViewer) {
+            Long invoicesNoNumber = invoiceMapper.selectCount(new LambdaQueryWrapper<Invoice>()
+                    .eq(Invoice::getStatus, InvoiceStatus.ISSUED.getCode())
+                    .and(w -> w.isNull(Invoice::getInvoiceNo).or().eq(Invoice::getInvoiceNo, "")));
+            addHealthItem(items, "invoice-no", "已开票待补发票号", invoicesNoNumber, "/business/invoice");
+
+            Long contractNoTax = contractMapper.selectCount(new LambdaQueryWrapper<Contract>()
+                    .eq(Contract::getStatus, ContractStatus.RUNNING.getCode())
+                    .isNull(Contract::getTaxRate));
+            addHealthItem(items, "contract-tax", "执行中合同未填税率", contractNoTax, "/business/contract");
+
+            Long stagnant = reimbursementMapper.selectCount(new LambdaQueryWrapper<Reimbursement>()
+                    .eq(Reimbursement::getStatus, 1)
+                    .le(Reimbursement::getCreateTime, LocalDateTime.now().minusDays(3)));
+            addHealthItem(items, "stagnant-bill", "滞留超3天的待审批报销", stagnant, "/business/reimbursement");
+        }
+        Long oldDrafts = reimbursementMapper.selectCount(new LambdaQueryWrapper<Reimbursement>()
+                .eq(Reimbursement::getStatus, 0)
+                .eq(Reimbursement::getApplicantId, user.getUserId())
+                .le(Reimbursement::getCreateTime, LocalDateTime.now().minusDays(7)));
+        addHealthItem(items, "old-draft", "超过7天未提交的报销草稿", oldDrafts, "/business/reimbursement");
+        return ApiResult.success(items);
+    }
+
+    private void addHealthItem(List<java.util.Map<String, Object>> items,
+                               String key, String title, Long count, String path) {
+        if (count != null && count > 0) {
+            items.add(Map.of("key", key, "title", title, "count", count, "path", path));
+        }
+    }
+
     private long countReimbursementPending(DataScopeService.Scope scope) {
         LambdaQueryWrapper<Reimbursement> wrapper = new LambdaQueryWrapper<Reimbursement>()
                 .in(Reimbursement::getStatus, 1, 4);

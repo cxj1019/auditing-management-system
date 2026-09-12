@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import * as echarts from 'echarts'
 import { useUserStore } from '@/stores/user'
-import { getDashboard } from '@/api/dashboard'
-import type { DashboardSummary } from '@/types'
+import { getDashboard, getMonthlyTrend, getHealthCheck } from '@/api/dashboard'
+import { getExpenseStats } from '@/api/cost'
+import type { DashboardSummary, MonthlyTrendItem, HealthCheckItem } from '@/types'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -42,10 +44,68 @@ function go(path: string): void {
   router.push(path)
 }
 
+// ---------- 数据体检 ----------
+const healthItems = ref<HealthCheckItem[]>([])
+
+// ---------- 经营趋势(仅管理员/经理) ----------
+const trendRef = ref<HTMLElement>()
+const pieRef = ref<HTMLElement>()
+let trendChart: echarts.ECharts | null = null
+let pieChart: echarts.ECharts | null = null
+
+async function renderCharts(): Promise<void> {
+  if (!canViewFinance.value) return
+  try {
+    const [trend, stats] = await Promise.all([
+      getMonthlyTrend().catch(() => [] as MonthlyTrendItem[]),
+      getExpenseStats(undefined).catch(() => []),
+    ])
+    await nextTick()
+    if (trendRef.value) {
+      trendChart = trendChart || echarts.init(trendRef.value)
+      const months = trend.map((t) => t.ym)
+      trendChart.setOption({
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['收入', '报销成本', '人工成本'] },
+        grid: { left: 8, right: 16, top: 36, bottom: 8, containLabel: true },
+        xAxis: { type: 'category', data: months },
+        yAxis: { type: 'value' },
+        series: [
+          { name: '收入', type: 'bar', data: trend.map((t) => Number(t.income)) },
+          { name: '报销成本', type: 'line', data: trend.map((t) => Number(t.expense)) },
+          { name: '人工成本', type: 'line', data: trend.map((t) => Number(t.labor)) },
+        ],
+      })
+    }
+    if (pieRef.value) {
+      const data = stats.map((s) => ({ name: s.category, value: Number(s.total || 0) }))
+        .filter((d) => d.value > 0)
+      pieChart = pieChart || echarts.init(pieRef.value)
+      pieChart.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: {c} 元 ({d}%)' },
+        legend: { bottom: 0, type: 'scroll' },
+        series: [{ type: 'pie', radius: ['38%', '66%'], center: ['50%', '44%'], data }],
+      })
+    }
+  } catch {
+    // 图表数据加载失败不影响首页其它内容
+  }
+}
+
 onMounted(async () => {
   loading.value = true
   try {
     summary.value = await getDashboard()
+    if (canViewFinance.value) {
+      try {
+        healthItems.value = await getHealthCheck()
+      } catch { /* 忽略 */ }
+      await renderCharts()
+      window.addEventListener('resize', () => {
+        trendChart?.resize()
+        pieChart?.resize()
+      })
+    }
   } finally {
     loading.value = false
   }
@@ -80,6 +140,40 @@ onMounted(async () => {
         <el-card shadow="hover" class="stat-card">
           <div class="stat-value" style="color: #2563eb">{{ money(summary?.receivable?.outstanding) }}</div>
           <div class="stat-title">未核销余额（元）</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- 数据体检 -->
+    <el-card v-if="healthItems.length" shadow="never" class="health-card">
+      <div class="health-list">
+        <div v-for="h in healthItems" :key="h.key" class="health-item" @click="go(h.path)">
+          <span class="health-count">{{ h.count }}</span>
+          <span class="health-title">{{ h.title }}</span>
+          <span class="health-arrow">→</span>
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 经营趋势(仅管理员/经理) -->
+    <el-row v-if="canViewFinance" :gutter="16">
+      <el-col :xs="24" :lg="16">
+        <el-card shadow="never" class="block-card">
+          <template #header>
+            <div class="block-header">
+              <span>近 12 个月经营趋势（不含税）</span>
+              <el-button link type="primary" @click="go('/business/cost')">成本分析</el-button>
+            </div>
+          </template>
+          <div ref="trendRef" style="height: 300px"></div>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :lg="8">
+        <el-card shadow="never" class="block-card">
+          <template #header>
+            <div class="block-header"><span>本年报销费用类别占比</span></div>
+          </template>
+          <div ref="pieRef" style="height: 300px"></div>
         </el-card>
       </el-col>
     </el-row>
@@ -302,5 +396,44 @@ onMounted(async () => {
 .proj-progress {
   width: 160px;
   flex-shrink: 0;
+}
+
+.health-card {
+  margin-bottom: 16px;
+}
+
+.health-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.health-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.health-item:hover {
+  border-color: #f59e0b;
+}
+
+.health-count {
+  font-weight: 700;
+  color: #d97706;
+}
+
+.health-title {
+  color: #374151;
+}
+
+.health-arrow {
+  color: #9ca3af;
 }
 </style>

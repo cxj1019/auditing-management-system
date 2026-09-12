@@ -373,6 +373,7 @@ export interface CollectionSummaryItem {
   contractAmount: number
   totalCollected: number
   outstanding: number
+  plannedTotal?: number
   progressPercent: number
 }
 
@@ -530,6 +531,32 @@ export interface ReimbursementItemData {
   taxAmountManual?: boolean
   projectId?: number
   billable?: boolean
+}
+
+/** 收款计划节点 */
+export interface PaymentPlanItem {
+  id: number
+  contractId: number
+  dueDate: string
+  amount: number
+  remark?: string
+  contractCollected?: number
+}
+
+/** 月度经营趋势行 */
+export interface MonthlyTrendItem {
+  ym: string
+  income: number
+  expense: number
+  labor: number
+}
+
+/** 数据体检项 */
+export interface HealthCheckItem {
+  key: string
+  title: string
+  count: number
+  path: string
 }
 
 /** 员工费用统计行 */

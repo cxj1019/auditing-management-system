@@ -1,5 +1,5 @@
 import request from './request'
-import type { ContractAttachmentItem, ContractItem, ContractOptionItem, ContractRequest, PageResult } from '@/types'
+import type { PaymentPlanItem, ContractAttachmentItem, ContractItem, ContractOptionItem, ContractRequest, PageResult } from '@/types'
 
 /** 非草稿合同下拉选项（供发票登记选择，带出项目/客户/开票信息） */
 export function getContractOptions(): Promise<ContractOptionItem[]> {
@@ -75,4 +75,27 @@ export function deleteAttachment(contractId: number, attachmentId: number): Prom
 /** 获取附件预览签名 URL */
 export function getContractAttPreviewUrl(contractId: number, attachmentId: number): Promise<string> {
   return request.get(`/contracts/${contractId}/attachments/${attachmentId}/preview-url`)
+}
+
+
+// ---------- 收款计划 ----------
+
+/** 收款计划节点清单 */
+export function getPaymentPlans(contractId: number): Promise<PaymentPlanItem[]> {
+  return request.get(`/contracts/${contractId}/payment-plans`)
+}
+
+/** 新增收款计划节点 */
+export function addPaymentPlan(contractId: number, data: { dueDate: string; amount: number; remark?: string }): Promise<PaymentPlanItem> {
+  return request.post(`/contracts/${contractId}/payment-plans`, data)
+}
+
+/** 编辑收款计划节点 */
+export function updatePaymentPlan(contractId: number, planId: number, data: { dueDate: string; amount: number; remark?: string }): Promise<void> {
+  return request.put(`/contracts/${contractId}/payment-plans/${planId}`, data)
+}
+
+/** 删除收款计划节点 */
+export function deletePaymentPlan(contractId: number, planId: number): Promise<void> {
+  return request.delete(`/contracts/${contractId}/payment-plans/${planId}`)
 }

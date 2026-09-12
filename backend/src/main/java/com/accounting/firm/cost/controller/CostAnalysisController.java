@@ -66,6 +66,12 @@ public class CostAnalysisController {
         return ApiResult.success(costAnalysisService.expenseStats(year));
     }
 
+    /** 近 12 个月经营趋势 */
+    @GetMapping("/monthly-trend")
+    public ApiResult<List<java.util.Map<String, Object>>> monthlyTrend() {
+        return ApiResult.success(costAnalysisService.monthlyTrend());
+    }
+
     @GetMapping("/overview")
     public ApiResult<OverviewVO> overview() {
         return ApiResult.success(costAnalysisService.overview());

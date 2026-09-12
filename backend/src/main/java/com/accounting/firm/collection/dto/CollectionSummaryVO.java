@@ -24,6 +24,9 @@ public class CollectionSummaryVO {
     /** 已收合计（元） */
     private BigDecimal totalCollected;
 
+    /** 收款计划合计（元），未登记计划为 0 */
+    private BigDecimal plannedTotal;
+
     /** 未收余额（元）＝合同金额 − 已收合计，可为负（超收） */
     private BigDecimal outstanding;
 

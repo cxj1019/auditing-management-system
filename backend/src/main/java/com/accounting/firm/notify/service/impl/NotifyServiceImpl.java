@@ -55,6 +55,7 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
     public static final String TYPE_CONFIRMATION = "confirmation";
     public static final String TYPE_REIMBURSEMENT = "reimbursement";
     public static final String TYPE_CONTRACT = "contract";
+    public static final String TYPE_PAYMENT_PLAN = "payment-plan";
 
     /** 应收账款逾期天数 */
     @Value("${notify.receivable-overdue-days:30}")
@@ -70,6 +71,7 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
 
     private final InvoiceMapper invoiceMapper;
     private final ContractPaymentMapper paymentMapper;
+    private final com.accounting.firm.contract.mapper.ContractPaymentPlanMapper paymentPlanMapper;
     private final ConfirmationMapper confirmationMapper;
     private final ReimbursementMapper reimbursementMapper;
     private final ContractMapper contractMapper;
@@ -120,7 +122,8 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
         int created = generateReceivableReminders()
                 + generateConfirmationReminders()
                 + generateReimbursementReminders()
-                + generateContractReminders();
+                + generateContractReminders()
+                + generatePaymentPlanReminders();
         log.info("[提醒] 每日提醒扫描完成，新增 {} 条", created);
         return created;
     }
@@ -264,6 +267,59 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
         return sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
                         .in(SysUser::getId, userIds).eq(SysUser::getStatus, 1))
                 .stream().map(SysUser::getId).toList();
+    }
+
+    /** 收款计划到期：执行中合同,到期日临近/已过且累计回款未达该节点累计计划额 */
+    private int generatePaymentPlanReminders() {
+        LocalDate today = LocalDate.now();
+        var plans = paymentPlanMapper.selectList(new LambdaQueryWrapper<com.accounting.firm.contract.entity.ContractPaymentPlan>()
+                .ge(com.accounting.firm.contract.entity.ContractPaymentPlan::getDueDate, today.minusDays(30))
+                .le(com.accounting.firm.contract.entity.ContractPaymentPlan::getDueDate, today.plusDays(3))
+                .orderByAsc(com.accounting.firm.contract.entity.ContractPaymentPlan::getDueDate));
+        if (plans.isEmpty()) {
+            return 0;
+        }
+        int created = 0;
+        Map<Long, BigDecimal> collectedCache = new HashMap<>();
+        Map<Long, List<com.accounting.firm.contract.entity.ContractPaymentPlan>> byContract = new HashMap<>();
+        for (var plan : plans) {
+            byContract.computeIfAbsent(plan.getContractId(), k -> new java.util.ArrayList<>()).add(plan);
+        }
+        for (var entry : byContract.entrySet()) {
+            Contract contract = contractMapper.selectById(entry.getKey());
+            if (contract == null || contract.getStatus() != ContractStatus.RUNNING.getCode()) {
+                continue;
+            }
+            BigDecimal collected = collectedCache.computeIfAbsent(contract.getId(), k ->
+                    paymentMapper.selectList(new LambdaQueryWrapper<ContractPayment>()
+                                    .eq(ContractPayment::getContractId, k))
+                            .stream().map(p -> p.getAmount() == null ? BigDecimal.ZERO : p.getAmount())
+                            .reduce(BigDecimal.ZERO, BigDecimal::add));
+            // 全部合同已收已达标则不提醒
+            BigDecimal totalPlanned = entry.getValue().stream()
+                    .map(pl -> pl.getAmount() == null ? BigDecimal.ZERO : pl.getAmount())
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            List<com.accounting.firm.contract.entity.ContractPaymentPlan> allPlans = paymentPlanMapper.selectList(
+                    new LambdaQueryWrapper<com.accounting.firm.contract.entity.ContractPaymentPlan>()
+                            .eq(com.accounting.firm.contract.entity.ContractPaymentPlan::getContractId, contract.getId())
+                            .orderByAsc(com.accounting.firm.contract.entity.ContractPaymentPlan::getDueDate));
+            BigDecimal cumBefore = BigDecimal.ZERO;
+            for (var plan : allPlans) {
+                boolean inWindow = plans.stream().anyMatch(pl -> pl.getId().equals(plan.getId()));
+                BigDecimal cum = cumBefore.add(plan.getAmount() == null ? BigDecimal.ZERO : plan.getAmount());
+                cumBefore = cum;
+                if (!inWindow || collected.compareTo(cum) >= 0) {
+                    continue;
+                }
+                String when = plan.getDueDate().isBefore(today) ? "已到期" : "即将到期";
+                String content = "合同 %s（%s）收款计划 %s（%s 元）%s，累计回款 %s 元未达计划".formatted(
+                        contract.getContractNo(), contract.getName(), plan.getDueDate(),
+                        plan.getAmount(), when, collected.toPlainString());
+                created += notifyCreator(contract.getCreateBy(), TYPE_PAYMENT_PLAN, plan.getId(),
+                        "/business/contract", "收款计划" + when, content);
+            }
+        }
+        return created;
     }
 
     /** 给业务创建人发通知；按 用户+类型+关联对象+当天 去重。返回 0/1 */

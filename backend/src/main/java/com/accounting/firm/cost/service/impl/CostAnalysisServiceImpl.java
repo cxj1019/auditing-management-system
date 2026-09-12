@@ -146,6 +146,11 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
     }
 
     @Override
+    public List<java.util.Map<String, Object>> monthlyTrend() {
+        return costAnalysisMapper.selectMonthlyTrend();
+    }
+
+    @Override
     public List<com.accounting.firm.cost.dto.ExpenseStatVO> expenseStats(Integer year) {
         // 与项目数据范围同规则：按申请人归属过滤（admin 全部；本部门；无部门仅本人）
         var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();

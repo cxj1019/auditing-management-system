@@ -80,6 +80,38 @@ public interface CostAnalysisMapper {
             ORDER BY applicant_name, i.category
             </script>
             """)
+    /** 近 N 月经营趋势：收入(价税分离)/报销成本/人工成本 按月聚合 */
+    @Select("""
+            WITH months AS (
+                SELECT to_char(generate_series(date_trunc('month', CURRENT_DATE) - interval '11 months',
+                                               date_trunc('month', CURRENT_DATE),
+                                               interval '1 month'), 'YYYY-MM') AS ym
+            )
+            SELECT m.ym,
+                   COALESCE(inc.amount, 0)  AS income,
+                   COALESCE(exp.amount, 0)  AS expense,
+                   COALESCE(lab.amount, 0)  AS labor
+            FROM months m
+            LEFT JOIN (SELECT to_char(cp.payment_date, 'YYYY-MM') AS ym,
+                              SUM(cp.amount / (1 + COALESCE(inv.tax_rate, c.tax_rate, 0) / 100)) AS amount
+                       FROM contract_payment cp
+                       JOIN contract c ON c.id = cp.contract_id
+                       LEFT JOIN invoice inv ON inv.id = cp.invoice_id
+                       GROUP BY 1) inc ON inc.ym = m.ym
+            LEFT JOIN (SELECT to_char(i.expense_date, 'YYYY-MM') AS ym,
+                              SUM(CASE WHEN i.invoice_type = 'vat_special' AND i.tax_rate IS NOT NULL
+                                       THEN i.amount - COALESCE(i.tax_amount, i.amount * i.tax_rate / (100 + i.tax_rate))
+                                       ELSE i.amount END) AS amount
+                       FROM reimbursement_item i
+                       JOIN reimbursement r ON r.id = i.reimbursement_id
+                       WHERE r.status = 1
+                       GROUP BY 1) exp ON exp.ym = m.ym
+            LEFT JOIN (SELECT cost_month AS ym, SUM(amount) AS amount
+                       FROM labor_cost GROUP BY 1) lab ON lab.ym = m.ym
+            ORDER BY m.ym
+            """)
+    List<java.util.Map<String, Object>> selectMonthlyTrend();
+
     List<com.accounting.firm.cost.dto.ExpenseStatVO> selectExpenseStats(
             @Param("year") Integer year,
             @Param("userIds") List<Long> userIds,

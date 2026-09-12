@@ -16,10 +16,14 @@ import {
   uploadAttachment,
   downloadAttachment,
   deleteAttachment,
+  getPaymentPlans,
+  addPaymentPlan,
+  updatePaymentPlan,
+  deletePaymentPlan,
 } from '@/api/contract'
 import { getContractAttPreviewUrl } from '@/api/contract'
 import AttachmentLink from '@/components/AttachmentLink.vue'
-import type { ContractAttachmentItem, ContractItem, ContractRequest, ContractStatus, ProjectItem, UserOption, BusinessTypeItem } from '@/types'
+import type { PaymentPlanItem, ContractAttachmentItem, ContractItem, ContractRequest, ContractStatus, ProjectItem, UserOption, BusinessTypeItem } from '@/types'
 import { restoreQuery, saveQuery } from '@/utils/queryCache'
 
 // ---------- 状态展示 ----------
@@ -325,6 +329,57 @@ async function handleChangeStatus(row: ContractItem, target: number, actionName:
   }
 }
 
+// ---------- 收款计划 ----------
+const planVisible = ref(false)
+const planTarget = ref<ContractItem | null>(null)
+const planRows = ref<PaymentPlanItem[]>([])
+const planLoading = ref(false)
+const planSaving = ref(false)
+const planForm = reactive<{ dueDate: string; amount: number | undefined; remark: string }>({
+  dueDate: '', amount: undefined, remark: '',
+})
+
+function openPlans(row: ContractItem): void {
+  planTarget.value = row
+  planVisible.value = true
+  loadPlans()
+}
+
+async function loadPlans(): Promise<void> {
+  if (!planTarget.value) return
+  planLoading.value = true
+  try {
+    planRows.value = await getPaymentPlans(planTarget.value.id)
+  } finally { planLoading.value = false }
+}
+
+async function handlePlanAdd(): Promise<void> {
+  if (!planTarget.value || !planForm.dueDate || !planForm.amount) {
+    ElMessage.warning('请填写日期与金额')
+    return
+  }
+  planSaving.value = true
+  try {
+    await addPaymentPlan(planTarget.value.id, {
+      dueDate: planForm.dueDate,
+      amount: planForm.amount,
+      remark: planForm.remark || undefined,
+    })
+    ElMessage.success('已添加')
+    planForm.dueDate = ''; planForm.amount = undefined; planForm.remark = ''
+    loadPlans()
+  } finally { planSaving.value = false }
+}
+
+async function handlePlanDelete(row: PaymentPlanItem): Promise<void> {
+  if (!planTarget.value) return
+  try {
+    await ElMessageBox.confirm(`确定删除该收款计划节点吗？`, '删除确认', { type: 'warning' })
+    await deletePaymentPlan(planTarget.value.id, row.id)
+    loadPlans()
+  } catch { /* 取消 */ }
+}
+
 // ---------- 删除 ----------
 async function handleDelete(row: ContractItem): Promise<void> {
   try {
@@ -453,9 +508,10 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
             <el-tag :type="statusTagTypes[row.status]" size="small">{{ statusLabels[row.status] }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="340" fixed="right">
           <template #default="{ row }">
             <el-button link type="info" size="small" @click="openAttachments(row)">附件</el-button>
+            <el-button link type="info" size="small" @click="openPlans(row)">收款计划</el-button>
             <el-button v-if="row.status === 0" v-permission="'business:contract:edit'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
             <el-button v-if="row.status === 0" v-permission="'business:contract:status'" link type="primary" size="small" @click="handleChangeStatus(row, 1, '开始执行')">开始执行</el-button>
             <el-button v-if="row.status === 1" v-permission="'business:contract:status'" link type="success" size="small" @click="handleChangeStatus(row, 2, '标记为已完成')">完成</el-button>
@@ -603,6 +659,32 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
           </template>
         </el-table-column>
       </el-table>
+    </el-dialog>
+
+    <!-- 收款计划 -->
+    <el-dialog v-model="planVisible" :title="`收款计划 - ${planTarget?.contractNo || ''}`" width="720px" append-to-body>
+      <div style="margin-bottom: 8px; color: #6b7280; font-size: 13px" v-if="planRows.length">
+        合同累计已收:
+        <b>{{ Number(planRows[0]?.contractCollected || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</b> 元
+      </div>
+      <el-table v-loading="planLoading" :data="planRows" border size="small" max-height="260">
+        <el-table-column prop="dueDate" label="计划收款日期" width="120" />
+        <el-table-column label="计划金额（元）" min-width="120" align="right">
+          <template #default="{ row }">{{ Number(row.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
+        <el-table-column label="操作" width="80" align="center">
+          <template #default="{ row }">
+            <el-button link type="danger" size="small" @click="handlePlanDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div style="display: flex; gap: 8px; margin-top: 10px; align-items: center">
+        <el-date-picker v-model="planForm.dueDate" type="date" value-format="YYYY-MM-DD" placeholder="收款日期" style="width: 160px" />
+        <el-input-number v-model="planForm.amount" :min="0.01" :precision="2" :step="1000" placeholder="金额" style="width: 180px" />
+        <el-input v-model="planForm.remark" placeholder="备注（如 签约款50%）" maxlength="200" style="flex: 1" />
+        <el-button type="primary" :loading="planSaving" @click="handlePlanAdd">添加</el-button>
+      </div>
     </el-dialog>
   </div>
 </template>

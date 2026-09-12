@@ -56,11 +56,14 @@ public interface ContractPaymentMapper extends BaseMapper<ContractPayment> {
             <script>
             SELECT c.id AS contract_id, c.contract_no, c.name AS contract_name,
                    cl.client_name,
-                   c.amount AS contract_amount, COALESCE(SUM(p.amount), 0) AS total_collected
+                   c.amount AS contract_amount, COALESCE(SUM(p.amount), 0) AS total_collected,
+                   COALESCE(MAX(plan.planned_total), 0) AS planned_total
             FROM contract c
             LEFT JOIN project pr ON pr.id = c.project_id
             LEFT JOIN client cl ON cl.id = pr.client_id
             LEFT JOIN contract_payment p ON p.contract_id = c.id
+            LEFT JOIN (SELECT contract_id, SUM(amount) AS planned_total
+                       FROM contract_payment_plan GROUP BY contract_id) plan ON plan.contract_id = c.id
             <where>
                 <if test="keyword != null and keyword != ''">
                     AND (c.contract_no LIKE '%' || #{keyword} || '%' OR c.name LIKE '%' || #{keyword} || '%'
@@ -71,7 +74,7 @@ public interface ContractPaymentMapper extends BaseMapper<ContractPayment> {
                 </if>
                 <if test="selfCreateBy != null">AND c.create_by = #{selfCreateBy}</if>
             </where>
-            GROUP BY c.id, c.contract_no, c.name, cl.client_name, c.amount, c.create_time
+            GROUP BY c.id, c.contract_no, c.name, cl.client_name, c.amount, c.create_time, plan.planned_total
             ORDER BY c.create_time DESC
             </script>
             """)
