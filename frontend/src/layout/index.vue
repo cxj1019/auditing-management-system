@@ -15,9 +15,8 @@ const hovered = computed(() => appStore.sidebarHovered)
 /** 手机/窄屏：侧边栏变抽屉，不参与文档流，也不靠悬停 */
 const isMobile = computed(() => appStore.isMobile)
 
-const asideVisible = computed(() =>
-  isMobile.value ? appStore.sidebarMobileOpen : pinned.value || hovered.value,
-)
+// 手机端不显示左侧导航（移动版有自己的底部标签栏）
+const asideVisible = computed(() => !isMobile.value && (pinned.value || hovered.value))
 
 /** 路由切换后自动收回浮层/抽屉 */
 watch(
@@ -41,8 +40,6 @@ onBeforeUnmount(() => {
   <el-container class="layout">
     <!-- 自动隐藏模式下的左边缘悬停热区（触屏无悬停，仅桌面） -->
     <div v-if="!isMobile && !pinned" class="sidebar-hover-zone" @mouseenter="appStore.setSidebarHovered(true)" />
-    <!-- 移动端抽屉遮罩 -->
-    <div v-if="isMobile && asideVisible" class="sidebar-mask" @click="appStore.sidebarMobileOpen = false" />
     <el-aside
       v-show="asideVisible"
       width="220px"

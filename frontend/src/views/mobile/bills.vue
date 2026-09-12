@@ -109,7 +109,7 @@ async function handleDelete(bill: ReimbursementItem): Promise<void> {
 
 function goDesktopEdit(bill: ReimbursementItem): void {
   // 跳桌面报销页并自动按单号搜索，列表第一行即目标单据，点"编辑"进入
-  router.push({ path: '/business/reimbursement', query: { keyword: bill.reimbursementNo } })
+  router.push({ path: '/business/reimbursement', query: { keyword: bill.reimbursementNo, desktop: '1' } })
 }
 
 onMounted(fetchList)

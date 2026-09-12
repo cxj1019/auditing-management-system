@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { pageContracts, createContract, updateContract } from '@/api/contract'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { pageContracts, createContract, updateContract, listAttachments, uploadAttachment, deleteAttachment } from '@/api/contract'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { listBusinessTypes } from '@/api/businessType'
 import { useUserStore } from '@/stores/user'
-import type { BusinessTypeItem, ContractItem, ContractRequest, ProjectItem } from '@/types'
+import CaptureUpload from '@/components/CaptureUpload.vue'
+import type { BusinessTypeItem, ContractAttachmentItem, ContractItem, ContractRequest, ProjectItem } from '@/types'
 
 /** 手机端合同：列表 + 登记/编辑（编辑仅草稿，与桌面一致；不含税主输入自动算税） */
 const userStore = useUserStore()
@@ -37,6 +38,35 @@ const expandedId = ref<number | null>(null)
 const projectOptions = ref<ProjectItem[]>([])
 const bizDict = ref<BusinessTypeItem[]>([])
 
+// ---------- 扫描件附件（拍照/相册，压缩后上传） ----------
+const attCache = ref<Record<number, ContractAttachmentItem[]>>({})
+const attUploading = ref(false)
+
+async function loadAtts(contractId: number): Promise<void> {
+  attCache.value[contractId] = await listAttachments(contractId).catch(() => [])
+}
+
+async function uploadAtts(c: ContractItem, files: File[]): Promise<void> {
+  if (!files.length) return
+  attUploading.value = true
+  try {
+    for (const f of files) await uploadAttachment(c.id, f)
+    ElMessage.success(`已上传 ${files.length} 个扫描件`)
+    await loadAtts(c.id)
+  } finally {
+    attUploading.value = false
+  }
+}
+
+async function removeAtt(c: ContractItem, att: ContractAttachmentItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`删除扫描件「${att.fileName}」？`, '删除确认', { type: 'warning' })
+  } catch { return }
+  await deleteAttachment(c.id, att.id)
+  ElMessage.success('已删除')
+  await loadAtts(c.id)
+}
+
 function money(v?: number): string {
   return v == null ? '—' : Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
 }
@@ -63,6 +93,15 @@ function switchStatus(v: number | undefined): void {
   activeStatus.value = v
   expandedId.value = null
   fetchList()
+}
+
+function toggle(c: ContractItem): void {
+  if (expandedId.value === c.id) {
+    expandedId.value = null
+    return
+  }
+  expandedId.value = c.id
+  if (!attCache.value[c.id]) loadAtts(c.id)
 }
 
 // ---------- 登记/编辑 ----------
@@ -200,11 +239,11 @@ onMounted(fetchList)
     <div v-if="!loading && !records.length" class="mt-empty">没有找到合同</div>
 
     <div v-for="c in records" :key="c.id" class="mt-card">
-      <div class="mt-card-head" @click="expandedId = expandedId === c.id ? null : c.id">
+      <div class="mt-card-head" @click="toggle(c)">
         <span class="mt-name">{{ c.clientName || c.contractNo }}</span>
         <el-tag :type="statusTypes[c.status]" size="small">{{ statusLabels[c.status] }}</el-tag>
       </div>
-      <div class="mt-sub" @click="expandedId = expandedId === c.id ? null : c.id">
+      <div class="mt-sub" @click="toggle(c)">
         {{ c.contractNo }}
       </div>
       <div class="mt-amount">
@@ -221,6 +260,15 @@ onMounted(fetchList)
         <div class="mt-row"><span>服务期间</span>{{ c.serviceStart || '—' }} ~ {{ c.serviceEnd || '—' }}</div>
         <div class="mt-row"><span>经办人</span>{{ c.keeperName || '—' }}</div>
         <div class="mt-row" v-if="c.remark"><span>备注</span>{{ c.remark }}</div>
+        <div class="mt-sec">扫描件（{{ attCache[c.id]?.length ?? 0 }}）</div>
+        <div v-for="att in attCache[c.id] || []" :key="att.id" class="mt-att">
+          <span class="mt-att-name">{{ att.fileName }}</span>
+          <el-button v-if="canEdit" link type="danger" size="small" @click="removeAtt(c, att)">删除</el-button>
+        </div>
+        <div v-if="canEdit" class="mt-upload">
+          <CaptureUpload :uploading="attUploading" text="选择文件" @pick="(files: File[]) => uploadAtts(c, files)" />
+        </div>
+
         <div v-if="canEdit && c.status === 0" class="mt-actions">
           <el-button size="small" type="primary" plain @click="openEdit(c)">编辑</el-button>
         </div>
@@ -290,6 +338,12 @@ onMounted(fetchList)
 .mt-detail { margin-top: 10px; border-top: 1px dashed #e5e7eb; padding-top: 8px; }
 .mt-row { font-size: 12px; color: #374151; padding: 2px 0; word-break: break-all; }
 .mt-row span { display: inline-block; width: 90px; color: #9ca3af; }
+.mt-sec { font-size: 12px; color: #2563eb; font-weight: 600; margin: 10px 0 4px; }
+.mt-att { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #374151; padding: 4px 0; border-bottom: 1px solid #f9fafb; }
+.mt-att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-upload { margin-top: 8px; }
+.mt-upload .cap-upload { display: flex; gap: 8px; width: 100%; }
+.mt-upload .el-button { flex: 1; }
 .mt-actions { margin-top: 10px; display: flex; justify-content: flex-end; }
 .mt-empty { text-align: center; color: #9ca3af; padding: 32px 0; }
 </style>

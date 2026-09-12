@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { pageConfirmations, createConfirmation, updateConfirmation, changeConfirmationStatus } from '@/api/confirmation'
+import { pageConfirmations, createConfirmation, updateConfirmation, changeConfirmationStatus, listConfirmationAttachments, uploadConfirmationAttachment, deleteConfirmationAttachment } from '@/api/confirmation'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { useUserStore } from '@/stores/user'
-import type { ConfirmationItem, ConfirmationRequest, ProjectItem } from '@/types'
+import CaptureUpload from '@/components/CaptureUpload.vue'
+import type { ConfirmationAttachmentItem, ConfirmationItem, ConfirmationRequest, ProjectItem } from '@/types'
 
 /** 手机端函证：列表 + 登记/编辑 + 发出/回函/作废流转（与桌面权限一致） */
 const userStore = useUserStore()
@@ -36,6 +37,39 @@ const expandedId = ref<number | null>(null)
 
 const projectOptions = ref<ProjectItem[]>([])
 
+// ---------- 附件（原始函证/回函 拍照上传） ----------
+const attCache = ref<Record<number, ConfirmationAttachmentItem[]>>({})
+const attUploading = ref(false)
+
+function attsOf(id: number, type: string): ConfirmationAttachmentItem[] {
+  return (attCache.value[id] || []).filter((a) => a.attachmentType === type)
+}
+
+async function loadAtts(id: number): Promise<void> {
+  attCache.value[id] = await listConfirmationAttachments(id).catch(() => [])
+}
+
+async function uploadAtts(c: ConfirmationItem, attachmentType: 'original' | 'reply', files: File[]): Promise<void> {
+  if (!files.length) return
+  attUploading.value = true
+  try {
+    for (const f of files) await uploadConfirmationAttachment(c.id, attachmentType, f)
+    ElMessage.success(`已上传 ${files.length} 个文件`)
+    await loadAtts(c.id)
+  } finally {
+    attUploading.value = false
+  }
+}
+
+async function removeAtt(c: ConfirmationItem, att: ConfirmationAttachmentItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`删除「${att.fileName}」？`, '删除确认', { type: 'warning' })
+  } catch { return }
+  await deleteConfirmationAttachment(c.id, att.id)
+  ElMessage.success('已删除')
+  await loadAtts(c.id)
+}
+
 function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -58,6 +92,15 @@ function switchStatus(v: number | undefined): void {
   activeStatus.value = v
   expandedId.value = null
   fetchList()
+}
+
+function toggle(c: ConfirmationItem): void {
+  if (expandedId.value === c.id) {
+    expandedId.value = null
+    return
+  }
+  expandedId.value = c.id
+  if (!attCache.value[c.id]) loadAtts(c.id)
 }
 
 // ---------- 登记/编辑 ----------
@@ -206,7 +249,7 @@ onMounted(fetchList)
     <div v-if="!loading && !records.length" class="mf-empty">没有找到函证</div>
 
     <div v-for="c in records" :key="c.id" class="mf-card">
-      <div class="mf-card-head" @click="expandedId = expandedId === c.id ? null : c.id">
+      <div class="mf-card-head" @click="toggle(c)">
         <span class="mf-name">{{ c.targetUnit }}</span>
         <el-tag :type="statusTypes[c.status]" size="small">{{ statusLabels[c.status] }}</el-tag>
       </div>
@@ -224,6 +267,24 @@ onMounted(fetchList)
         <div class="mf-row"><span>回函日期</span>{{ c.confirmedDate || '—' }}</div>
         <div class="mf-row" v-if="c.replyTrackingNo"><span>回函快递</span>{{ c.replyTrackingNo }}</div>
         <div class="mf-row" v-if="c.discrepancyReason"><span>差异原因</span>{{ c.discrepancyReason }}</div>
+
+        <div class="mf-sec">原始函证（{{ attsOf(c.id, 'original').length }}）</div>
+        <div v-for="att in attsOf(c.id, 'original')" :key="att.id" class="mf-att">
+          <span class="mf-att-name">{{ att.fileName }}</span>
+          <el-button v-if="canEdit" link type="danger" size="small" @click="removeAtt(c, att)">删除</el-button>
+        </div>
+        <div v-if="canEdit" class="mf-upload">
+          <CaptureUpload :uploading="attUploading" text="选择文件" @pick="(files: File[]) => uploadAtts(c, 'original', files)" />
+        </div>
+
+        <div class="mf-sec">回函扫描件（{{ attsOf(c.id, 'reply').length }}）</div>
+        <div v-for="att in attsOf(c.id, 'reply')" :key="att.id" class="mf-att">
+          <span class="mf-att-name">{{ att.fileName }}</span>
+          <el-button v-if="canEdit" link type="danger" size="small" @click="removeAtt(c, att)">删除</el-button>
+        </div>
+        <div v-if="canEdit" class="mf-upload">
+          <CaptureUpload :uploading="attUploading" text="选择文件" @pick="(files: File[]) => uploadAtts(c, 'reply', files)" />
+        </div>
 
         <div class="mf-actions">
           <el-button v-if="canEdit && c.status !== 3" size="small" plain @click="openEdit(c)">编辑</el-button>
@@ -280,6 +341,12 @@ onMounted(fetchList)
 .mf-detail { margin-top: 10px; border-top: 1px dashed #e5e7eb; padding-top: 8px; }
 .mf-row { font-size: 12px; color: #374151; padding: 2px 0; word-break: break-all; }
 .mf-row span { display: inline-block; width: 68px; color: #9ca3af; }
+.mf-sec { font-size: 12px; color: #2563eb; font-weight: 600; margin: 10px 0 4px; }
+.mf-att { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #374151; padding: 4px 0; border-bottom: 1px solid #f9fafb; }
+.mf-att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-upload { margin-top: 8px; }
+.mf-upload .cap-upload { display: flex; gap: 8px; width: 100%; }
+.mf-upload .el-button { flex: 1; }
 .mf-actions { margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .mf-empty { text-align: center; color: #9ca3af; padding: 32px 0; }
 </style>

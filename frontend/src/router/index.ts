@@ -128,6 +128,21 @@ const router = createRouter({
   routes: constantRoutes,
 })
 
+/** 手机端自动跳转映射：桌面路径 → 移动页（'/' 与 /dashboard 已由路由重定向到 /dashboard） */
+const MOBILE_REDIRECTS: Record<string, string> = {
+  '/': '/m/home',
+  '/dashboard': '/m/home',
+  '/business/reimbursement': '/m/bills',
+  '/business/schedule': '/m/schedule',
+  '/business/client': '/m/clients',
+  '/business/project': '/m/projects',
+  '/business/contract': '/m/contracts',
+  '/business/collection': '/m/collections',
+  '/business/confirmation': '/m/confirmations',
+  '/business/invoice': '/m/invoices',
+  '/business/fx': '/m/fx',
+}
+
 /** 全局前置守卫：登录校验 + 动态注册模块路由 */
 router.beforeEach(async (to) => {
   // 登录页始终放行（注意：404 不能提前放行，否则刷新业务页面时
@@ -142,14 +157,13 @@ router.beforeEach(async (to) => {
     return { path: '/login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
   }
 
-  // 手机访问根路径/工作台时自动进移动端首页（'/' 会在路由内部重定向到 /dashboard，
-  // 守卫拿到的已是 /dashboard，因此两者都要拦）；?desktop=1 表示用户主动要看电脑版，不拦
-  if (
-    (to.path === '/' || to.path === '/dashboard') &&
-    window.innerWidth < 768 &&
-    to.query.desktop !== '1'
-  ) {
-    return { path: '/m/home' }
+  // 手机上统一走移动版：桌面路径自动映射到对应移动页（成本分析等无移动页的不映射）；
+  // ?desktop=1 表示用户主动要看电脑版，不拦
+  if (window.innerWidth < 768 && to.query.desktop !== '1') {
+    const mobileRedirect = MOBILE_REDIRECTS[to.path]
+    if (mobileRedirect) {
+      return { path: mobileRedirect }
+    }
   }
 
   // 已登录但未加载用户信息：拉取信息并按权限注册模块路由

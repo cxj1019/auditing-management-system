@@ -144,7 +144,7 @@ async function handleChangePassword(): Promise<void> {
 <template>
   <div class="navbar">
     <div class="navbar-left">
-      <el-icon class="collapse-btn" :title="isMobile ? '菜单' : (appStore.sidebarPinned ? '自动隐藏侧边栏' : '固定侧边栏')" @click="onCollapseClick">
+      <el-icon v-if="!isMobile" class="collapse-btn" :title="appStore.sidebarPinned ? '自动隐藏侧边栏' : '固定侧边栏'" @click="onCollapseClick">
         <Fold v-if="isMobile ? appStore.sidebarMobileOpen : appStore.sidebarPinned" />
         <Expand v-else />
       </el-icon>

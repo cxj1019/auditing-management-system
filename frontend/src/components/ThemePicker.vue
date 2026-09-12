@@ -86,6 +86,13 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onDocMouseDown))
   transform: scale(1.08);
 }
 
+/* 手机端隐藏悬浮球：避免遮挡底部标签栏，主题切换在电脑端进行 */
+@media (max-width: 768px) {
+  .theme-root {
+    display: none;
+  }
+}
+
 .theme-panel {
   width: 216px;
   padding: 10px 8px;
