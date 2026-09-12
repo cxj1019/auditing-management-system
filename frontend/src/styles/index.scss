@@ -99,3 +99,55 @@ a {
     margin-top: 6vh !important;
   }
 }
+
+/* ---------- 手机端横向溢出治理 ----------
+ * 页面本身不允许横向平移：大表格一律在卡片内部横向滑动，
+ * 防止整页被表格撑宽后整体错位（表现为列和分页被"切掉"左边） */
+html,
+body,
+#app {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+.el-main {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.page-container {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.el-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 手机端工具类：桌面无关紧要、手机上没用的控件加 .m-hide 隐藏 */
+.m-hide {
+  display: initial;
+}
+
+@media (max-width: 768px) {
+  .m-hide {
+    display: none !important;
+  }
+
+  /* 分页在窄屏只保留 总条数 + 页码，尺寸选择与跳页隐藏，允许换行 */
+  .el-pagination {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .el-pagination .el-pagination__sizes,
+  .el-pagination .el-pagination__jump,
+  .el-pagination .el-pagination__goto {
+    display: none;
+  }
+
+  .pagination-wrapper {
+    justify-content: flex-start;
+  }
+}

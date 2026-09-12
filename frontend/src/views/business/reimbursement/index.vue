@@ -600,8 +600,8 @@ onMounted(() => {
           <el-button @click="handleReset">重置</el-button>
         </div>
         <div>
-          <el-date-picker v-model="exportRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="导出开始" end-placeholder="导出结束" style="width: 260px; margin-right: 8px" />
-          <el-button :loading="exporting" @click="handleExportExcel">导出 Excel</el-button>
+          <el-date-picker v-model="exportRange" class="m-hide" type="daterange" value-format="YYYY-MM-DD" start-placeholder="导出开始" end-placeholder="导出结束" style="width: 260px; margin-right: 8px" />
+          <el-button class="m-hide" :loading="exporting" @click="handleExportExcel">导出 Excel</el-button>
           <el-button v-permission="'business:reimbursement:add'" type="primary" @click="openCreate">新建报销</el-button>
         </div>
       </div>

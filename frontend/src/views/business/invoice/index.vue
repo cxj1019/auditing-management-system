@@ -425,7 +425,7 @@ onMounted(fetchList)
           <el-button @click="handleReset">重置</el-button>
         </div>
         <div>
-          <el-button :loading="exporting" @click="handleExportPending">导出待开票清单</el-button>
+          <el-button class="m-hide" :loading="exporting" @click="handleExportPending">导出待开票清单</el-button>
           <el-button @click="agingVisible = true">应收账龄</el-button>
         <el-button v-permission="'business:invoice:add'" type="primary" @click="openCreate">登记发票</el-button>
         </div>
