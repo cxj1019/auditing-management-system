@@ -100,8 +100,13 @@ router.beforeEach(async (to) => {
     return { path: '/login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
   }
 
-  // 手机访问根路径直接进移动端首页（独立布局）
-  if (to.path === '/' && window.innerWidth < 768) {
+  // 手机访问根路径/工作台时自动进移动端首页（'/' 会在路由内部重定向到 /dashboard，
+  // 守卫拿到的已是 /dashboard，因此两者都要拦）；?desktop=1 表示用户主动要看电脑版，不拦
+  if (
+    (to.path === '/' || to.path === '/dashboard') &&
+    window.innerWidth < 768 &&
+    to.query.desktop !== '1'
+  ) {
     return { path: '/m/home' }
   }
 

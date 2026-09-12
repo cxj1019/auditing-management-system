@@ -110,7 +110,7 @@ async function handleLogout(): Promise<void> {
         <span class="mm-item-label">修改密码</span>
         <el-icon class="mm-arrow"><ArrowRight /></el-icon>
       </div>
-      <div class="mm-item" @click="router.push('/dashboard')">
+      <div class="mm-item" @click="router.push('/dashboard?desktop=1')">
         <el-icon :size="18"><Monitor /></el-icon>
         <span class="mm-item-label">回到电脑版首页</span>
         <el-icon class="mm-arrow"><ArrowRight /></el-icon>
