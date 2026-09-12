@@ -37,6 +37,13 @@ export const constantRoutes: RouteRecordRaw[] = [
     meta: { title: '报销审批' },
   },
   {
+    // 移动端快速报销：调用手机摄像头拍照上传发票，卡片式填单
+    path: '/m/reimburse',
+    name: 'MobileReimburse',
+    component: () => import('@/views/business/reimbursement/mobileSubmit.vue'),
+    meta: { title: '我要报销' },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/error/404.vue'),

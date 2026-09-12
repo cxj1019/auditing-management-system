@@ -26,6 +26,7 @@ import {
   getReimbAttPreviewUrl,
 } from '@/api/reimbursement'
 import AttachmentLink from '@/components/AttachmentLink.vue'
+import { compressImage } from '@/utils/imageCompress'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { useUserStore } from '@/stores/user'
 import type {
@@ -346,7 +347,7 @@ async function handleRowUpload(options: UploadRequestOptions): Promise<void> {
   if (!editingId.value || !rowAttTarget.value?.id) return
   rowAttUploading.value = true
   try {
-    await uploadReimbAttachment(editingId.value, options.file, rowAttTarget.value.id)
+    await uploadReimbAttachment(editingId.value, await compressImage(options.file), rowAttTarget.value.id)
     ElMessage.success('上传成功')
     refreshBillAtts()
   } finally {
@@ -465,7 +466,7 @@ async function handleUploadAtt(options: UploadRequestOptions): Promise<void> {
   if (!detail.value) return
   attUploading.value = true
   try {
-    await uploadReimbAttachment(detail.value.id, options.file)
+    await uploadReimbAttachment(detail.value.id, await compressImage(options.file))
     ElMessage.success('上传成功')
     fetchAttachments(detail.value.id)
   } finally {
@@ -571,7 +572,7 @@ async function handleDetailRowUpload(options: UploadRequestOptions, itemId: numb
   if (!detail.value) return
   attUploading.value = true
   try {
-    await uploadReimbAttachment(detail.value.id, options.file, itemId)
+    await uploadReimbAttachment(detail.value.id, await compressImage(options.file), itemId)
     ElMessage.success('上传成功')
     await fetchAttachments(detail.value.id)
   } finally {

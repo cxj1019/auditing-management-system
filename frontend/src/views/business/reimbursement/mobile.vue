@@ -71,7 +71,10 @@ onMounted(fetchList)
   <div class="m-page">
     <div class="m-header">
       <span class="m-title">报销审批</span>
-      <el-button size="small" text @click="fetchList">刷新</el-button>
+      <div>
+        <el-button size="small" text @click="fetchList">刷新</el-button>
+        <el-button size="small" text type="primary" @click="$router.push('/m/reimburse')">我要报销</el-button>
+      </div>
     </div>
 
     <div v-if="!canApprove" class="m-empty">您没有报销审批权限</div>
