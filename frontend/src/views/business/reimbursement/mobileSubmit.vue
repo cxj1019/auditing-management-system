@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createReimbursement, updateReimbursement, submitReimbursement, getReimbItems,
@@ -13,6 +13,7 @@ import { useUserStore } from '@/stores/user'
 import type { ProjectItem, ReimbursementAttachmentItem, ReimbursementItemData } from '@/types'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const FALLBACK_CATEGORIES = ['差旅费', '交通费', '办公费', '餐饮费', '其他']
@@ -24,6 +25,10 @@ const projectOptions = ref<ProjectItem[]>([])
 const saving = ref(false)
 const submitting = ref(false)
 const draftId = ref<number | null>(null)
+/** 编辑已有单据（草稿/已驳回）：从"报销单"列表带 id 进入 */
+const editingExisting = ref(false)
+/** 编辑模式下提交后回列表而非审批页 */
+const cameFromBills = ref(false)
 /** 已保存的明细行 ID（附件按行关联） */
 const itemIds = ref<number[]>([])
 const attachments = ref<ReimbursementAttachmentItem[]>([])
@@ -198,30 +203,66 @@ async function handleSubmit(): Promise<void> {
   try {
     await submitReimbursement(draftId.value)
     ElMessage.success('已提交审批')
-    router.push('/m/approval')
+    router.push(cameFromBills.value || editingExisting.value ? '/m/bills' : '/m/approval')
   } finally {
     submitting.value = false
   }
 }
 
+/** 编辑已有单据：加载单头（标题/项目由列表带入）+ 明细行 + 已传附件 */
+async function loadExisting(id: number, title: string, projectId: string): Promise<void> {
+  editingExisting.value = true
+  draftId.value = id
+  form.title = title
+  form.projectId = projectId ? Number(projectId) : undefined
+  const [items, atts] = await Promise.all([
+    getReimbItems(id),
+    listReimbAttachments(id).catch(() => []),
+  ])
+  form.items = items.map((i) => ({
+    id: i.id,
+    category: i.category,
+    amount: Number(i.amount),
+    expenseDate: i.expenseDate,
+    description: i.description || '',
+    invoiceNumber: i.invoiceNumber || '',
+    isVatInvoice: !!i.isVatInvoice,
+    invoiceType: i.invoiceType || 'none',
+    taxRate: i.taxRate ?? undefined,
+    taxAmount: i.taxAmount ?? undefined,
+    taxAmountManual: i.taxAmount != null,
+    projectId: i.projectId ?? undefined,
+    billable: !!i.billable,
+  }))
+  itemIds.value = items.map((i) => i.id)
+  attachments.value = atts
+}
+
 onMounted(() => {
   if (!canCreate.value) return
   loadDicts()
-  addItem()
+  const id = Number(route.query.id)
+  if (id > 0) {
+    cameFromBills.value = route.query.from === 'bills'
+    loadExisting(id, String(route.query.title || ''), String(route.query.projectId || ''))
+  } else {
+    addItem()
+  }
 })
 </script>
 
 <template>
   <div class="m-page">
     <div class="m-header">
-      <span class="m-title">我要报销</span>
+      <span class="m-title">{{ editingExisting ? '编辑报销单' : '我要报销' }}</span>
       <el-button v-if="canCreate" size="small" text type="primary" @click="router.push('/m/approval')">我的审批</el-button>
     </div>
 
     <div v-if="!canCreate" class="m-empty">您没有新建报销的权限</div>
 
     <template v-else>
-      <div v-if="draftId" class="m-draft-tip">草稿已保存，补充完发票照片后即可提交</div>
+      <div v-if="draftId && editingExisting" class="m-draft-tip">修改明细或补拍发票后，点底部"提交审批"重新进入审批</div>
+      <div v-else-if="draftId" class="m-draft-tip">草稿已保存，补充完发票照片后即可提交</div>
 
       <!-- 单头 -->
       <div class="m-card">

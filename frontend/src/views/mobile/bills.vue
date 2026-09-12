@@ -107,9 +107,12 @@ async function handleDelete(bill: ReimbursementItem): Promise<void> {
   } finally { acting.value = false }
 }
 
-function goDesktopEdit(bill: ReimbursementItem): void {
-  // 跳桌面报销页并自动按单号搜索，列表第一行即目标单据，点"编辑"进入
-  router.push({ path: '/business/reimbursement', query: { keyword: bill.reimbursementNo, desktop: '1' } })
+function openEdit(bill: ReimbursementItem): void {
+  // 手机内直接编辑：带单据信息进拍照报销页（草稿/已驳回均可改后重新提交）
+  router.push({
+    path: '/m/reimburse',
+    query: { id: String(bill.id), title: bill.title || '', projectId: bill.projectId != null ? String(bill.projectId) : '', from: 'bills' },
+  })
 }
 
 onMounted(fetchList)
@@ -158,7 +161,7 @@ onMounted(fetchList)
         <!-- 草稿：提交 / 删除 / 桌面编辑；待审批：撤回；已驳回：去桌面改后重新提交 -->
         <div class="mb-actions">
           <template v-if="bill.status === 0">
-            <el-button size="small" :disabled="acting" @click="goDesktopEdit(bill)">编辑</el-button>
+            <el-button size="small" :disabled="acting" @click="openEdit(bill)">编辑</el-button>
             <el-button size="small" type="danger" plain :disabled="acting" @click="handleDelete(bill)">删除</el-button>
             <el-button size="small" type="primary" :disabled="acting" @click="handleSubmit(bill)">提交</el-button>
           </template>
@@ -166,7 +169,7 @@ onMounted(fetchList)
             <el-button size="small" type="warning" plain :disabled="acting" @click="handleWithdraw(bill)">撤回</el-button>
           </template>
           <template v-else-if="bill.status === 3">
-            <el-button size="small" type="primary" plain :disabled="acting" @click="goDesktopEdit(bill)">修改后重新提交</el-button>
+            <el-button size="small" type="primary" plain :disabled="acting" @click="openEdit(bill)">修改后重新提交</el-button>
           </template>
         </div>
       </div>
