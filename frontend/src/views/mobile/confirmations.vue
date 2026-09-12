@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { pageConfirmations } from '@/api/confirmation'
-import type { ConfirmationItem } from '@/types'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { pageConfirmations, createConfirmation, updateConfirmation, changeConfirmationStatus } from '@/api/confirmation'
+import { projectOptions as projectOptionsApi } from '@/api/project'
+import { useUserStore } from '@/stores/user'
+import type { ConfirmationItem, ConfirmationRequest, ProjectItem } from '@/types'
 
-/** 手机端函证列表：状态筛选 + 卡片 */
+/** 手机端函证：列表 + 登记/编辑 + 发出/回函/作废流转（与桌面权限一致） */
+const userStore = useUserStore()
+
 const statusLabels: Record<number, string> = { 0: '未发出', 1: '已发出', 2: '已回函', 3: '已作废' }
 const statusTypes: Record<number, 'info' | 'primary' | 'success' | 'danger'> = {
   0: 'info', 1: 'primary', 2: 'success', 3: 'danger',
@@ -16,11 +21,24 @@ const statusFilters = [
   { label: '已回函', value: 2 },
 ]
 
+const types = ['银行函证', '往来款函证', '其他']
+const methods = ['邮寄', '电子', '跟函', '其他']
+
+const canAdd = computed(() => userStore.hasPermission('business:confirmation:add'))
+const canEdit = computed(() => userStore.hasPermission('business:confirmation:edit'))
+const canTransit = computed(() => userStore.hasPermission('business:confirmation:status'))
+
 const loading = ref(false)
 const keyword = ref('')
 const activeStatus = ref<number | undefined>(undefined)
 const records = ref<ConfirmationItem[]>([])
 const expandedId = ref<number | null>(null)
+
+const projectOptions = ref<ProjectItem[]>([])
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10)
+}
 
 async function fetchList(): Promise<void> {
   loading.value = true
@@ -42,12 +60,133 @@ function switchStatus(v: number | undefined): void {
   fetchList()
 }
 
+// ---------- 登记/编辑 ----------
+const formVisible = ref(false)
+const saving = ref(false)
+const editingId = ref<number | null>(null)
+
+const emptyForm = (): ConfirmationRequest => ({
+  confirmationNo: '',
+  type: '银行函证',
+  confirmationMethod: '邮寄',
+  targetUnit: '',
+  summary: '',
+  projectId: undefined,
+})
+const form = reactive<ConfirmationRequest>(emptyForm())
+
+function openCreate(): void {
+  Object.assign(form, emptyForm())
+  editingId.value = null
+  loadProjects()
+  formVisible.value = true
+}
+
+function openEdit(c: ConfirmationItem): void {
+  Object.assign(form, {
+    id: c.id,
+    confirmationNo: c.confirmationNo,
+    type: c.type,
+    confirmationMethod: c.confirmationMethod || '',
+    targetUnit: c.targetUnit,
+    summary: c.summary,
+    projectId: c.projectId ?? undefined,
+  })
+  editingId.value = c.id
+  loadProjects()
+  formVisible.value = true
+}
+
+async function loadProjects(): Promise<void> {
+  if (!projectOptions.value.length) {
+    try {
+      projectOptions.value = await projectOptionsApi()
+    } catch { /* 忽略 */ }
+  }
+}
+
+async function handleSave(): Promise<void> {
+  if (!form.confirmationNo.trim()) { ElMessage.warning('请填写函证编号'); return }
+  if (!form.targetUnit.trim()) { ElMessage.warning('请填写函证单位'); return }
+  if (!form.summary.trim()) { ElMessage.warning('请填写函证内容'); return }
+  saving.value = true
+  try {
+    if (editingId.value) {
+      await updateConfirmation({ ...form, id: editingId.value })
+      ElMessage.success('函证已更新')
+    } else {
+      await createConfirmation(form)
+      ElMessage.success('函证已登记')
+    }
+    formVisible.value = false
+    await fetchList()
+  } finally {
+    saving.value = false
+  }
+}
+
+// ---------- 状态流转 ----------
+const transiting = ref(false)
+
+async function handleSend(c: ConfirmationItem): Promise<void> {
+  let date = today()
+  try {
+    const input = await ElMessageBox.prompt(`发出函证「${c.confirmationNo}」，确认发出日期`, '发出函证', {
+      inputValue: date, confirmButtonText: '发出', cancelButtonText: '取消',
+    })
+    date = input.value || date
+  } catch { return }
+  transiting.value = true
+  try {
+    await changeConfirmationStatus(c.id, 'send', date)
+    ElMessage.success('已发出')
+    await fetchList()
+  } finally {
+    transiting.value = false
+  }
+}
+
+async function handleConfirm(c: ConfirmationItem): Promise<void> {
+  let date = today()
+  try {
+    const input = await ElMessageBox.prompt(`函证「${c.confirmationNo}」收到回函，确认回函日期`, '回函确认', {
+      inputValue: date, confirmButtonText: '确定', cancelButtonText: '取消',
+    })
+    date = input.value || date
+  } catch { return }
+  transiting.value = true
+  try {
+    await changeConfirmationStatus(c.id, 'confirm', date)
+    ElMessage.success('已登记回函')
+    await fetchList()
+  } finally {
+    transiting.value = false
+  }
+}
+
+async function handleVoid(c: ConfirmationItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`作废函证「${c.confirmationNo}」？`, '作废确认', { type: 'warning' })
+  } catch { return }
+  transiting.value = true
+  try {
+    await changeConfirmationStatus(c.id, 'void')
+    ElMessage.success('已作废')
+    await fetchList()
+  } finally {
+    transiting.value = false
+  }
+}
+
 onMounted(fetchList)
 </script>
 
 <template>
   <div class="mf-page">
-    <div class="mf-header"><span class="mf-title">函证</span></div>
+    <div class="mf-header">
+      <span class="mf-title">函证</span>
+      <el-button v-if="canAdd" type="primary" size="small" @click="openCreate">＋ 登记</el-button>
+    </div>
 
     <div class="mf-search">
       <el-input v-model="keyword" placeholder="函证号/单位" clearable @keyup.enter="fetchList" @clear="fetchList" />
@@ -85,14 +224,49 @@ onMounted(fetchList)
         <div class="mf-row"><span>回函日期</span>{{ c.confirmedDate || '—' }}</div>
         <div class="mf-row" v-if="c.replyTrackingNo"><span>回函快递</span>{{ c.replyTrackingNo }}</div>
         <div class="mf-row" v-if="c.discrepancyReason"><span>差异原因</span>{{ c.discrepancyReason }}</div>
+
+        <div class="mf-actions">
+          <el-button v-if="canEdit && c.status !== 3" size="small" plain @click="openEdit(c)">编辑</el-button>
+          <el-button v-if="canTransit && c.status === 0" size="small" type="primary" :disabled="transiting" @click="handleSend(c)">发出</el-button>
+          <el-button v-if="canTransit && c.status === 1" size="small" type="success" :disabled="transiting" @click="handleConfirm(c)">登记回函</el-button>
+          <el-button v-if="canTransit && c.status !== 3" size="small" type="danger" plain :disabled="transiting" @click="handleVoid(c)">作废</el-button>
+        </div>
       </div>
     </div>
+
+    <!-- 登记/编辑函证 -->
+    <el-dialog v-model="formVisible" :title="editingId ? '编辑函证' : '登记函证'" :width="340">
+      <el-form label-width="80px">
+        <el-form-item label="函证编号" required><el-input v-model="form.confirmationNo" maxlength="50" /></el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="form.type" style="width: 100%">
+            <el-option v-for="t in types" :key="t" :label="t" :value="t" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="函证方式">
+          <el-select v-model="form.confirmationMethod" style="width: 100%" clearable>
+            <el-option v-for="m in methods" :key="m" :label="m" :value="m" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="函证单位" required><el-input v-model="form.targetUnit" maxlength="200" /></el-form-item>
+        <el-form-item label="函证内容" required><el-input v-model="form.summary" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="关联项目">
+          <el-select v-model="form.projectId" style="width: 100%" clearable filterable>
+            <el-option v-for="p in projectOptions" :key="p.id" :label="`${p.projectNo} | ${p.name}`" :value="p.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="formVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
 .mf-page { max-width: 640px; margin: 0 auto; padding: 14px 12px; }
-.mf-header { margin-bottom: 10px; }
+.mf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .mf-title { font-size: 18px; font-weight: 600; }
 .mf-search { display: flex; gap: 8px; margin-bottom: 10px; }
 .mf-search .el-input { flex: 1; }
@@ -106,5 +280,6 @@ onMounted(fetchList)
 .mf-detail { margin-top: 10px; border-top: 1px dashed #e5e7eb; padding-top: 8px; }
 .mf-row { font-size: 12px; color: #374151; padding: 2px 0; word-break: break-all; }
 .mf-row span { display: inline-block; width: 68px; color: #9ca3af; }
+.mf-actions { margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .mf-empty { text-align: center; color: #9ca3af; padding: 32px 0; }
 </style>
