@@ -228,7 +228,10 @@ async function handleVoid(c: ConfirmationItem): Promise<void> {
   }
 }
 
-onMounted(fetchList)
+onMounted(() => {
+  fetchList()
+  loadProjects()
+})
 </script>
 
 <template>
