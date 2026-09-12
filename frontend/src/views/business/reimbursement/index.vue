@@ -29,6 +29,7 @@ import AttachmentLink from '@/components/AttachmentLink.vue'
 import CaptureUpload from '@/components/CaptureUpload.vue'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { useUserStore } from '@/stores/user'
+import { useAppStore } from '@/stores/app'
 import type {
   ProjectItem,
   ReimbursementAttachmentItem,
@@ -39,6 +40,8 @@ import type {
 } from '@/types'
 
 const userStore = useUserStore()
+const appStore = useAppStore()
+const isMobile = computed(() => appStore.isMobile)
 const route = useRoute()
 // 费用类别字典（系统管理员可在类别设置中增删改）
 const FALLBACK_CATEGORIES = ['差旅费', '交通费', '办公费', '餐饮费', '其他']
@@ -613,8 +616,8 @@ onMounted(() => {
 
       <!-- 报销单表格 -->
       <el-table v-loading="loading" :data="records" border stripe>
-        <el-table-column prop="reimbursementNo" label="报销编号" min-width="140" />
-        <el-table-column prop="applicantName" label="申请人" width="100" />
+        <el-table-column v-if="!isMobile" prop="reimbursementNo" label="报销编号" min-width="140" />
+        <el-table-column v-if="!isMobile" prop="applicantName" label="申请人" width="100" />
         <el-table-column prop="title" label="标题" min-width="170" show-overflow-tooltip />
         <el-table-column label="总额（元）" min-width="110" align="right">
           <template #default="{ row }">{{ money(row.totalAmount) }}</template>
@@ -624,7 +627,7 @@ onMounted(() => {
             <el-tag :type="statusTagTypes[row.status]" size="small">{{ statusLabels[row.status] }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="财务" width="110" align="center">
+        <el-table-column v-if="!isMobile" label="财务" width="110" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.isPaid" type="success" size="small">已付款</el-tag>
             <el-tag v-else-if="row.isInvoiceReceived" type="primary" size="small">已收票</el-tag>

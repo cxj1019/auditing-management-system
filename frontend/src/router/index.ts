@@ -42,6 +42,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '首页' },
       },
       {
+        path: 'schedule',
+        name: 'MobileSchedule',
+        component: () => import('@/views/mobile/schedule.vue'),
+        meta: { title: '日程' },
+      },
+      {
         path: 'bills',
         name: 'MobileBills',
         component: () => import('@/views/mobile/bills.vue'),

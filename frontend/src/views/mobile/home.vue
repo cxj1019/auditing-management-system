@@ -50,7 +50,7 @@ const quickActions = computed(() => {
     { label: '发票管理', icon: 'Postcard', path: '/business/invoice', color: '#ef4444' },
     { label: '收款管理', icon: 'Money', path: '/business/collection', color: '#10b981' },
     { label: '函证管理', icon: 'Memo', path: '/business/confirmation', color: '#6366f1' },
-    { label: '日程管理', icon: 'Calendar', path: '/business/schedule', color: '#ec4899' },
+    { label: '日程周板', icon: 'Calendar', path: '/m/schedule', color: '#ec4899' },
   ]
   if (canViewFinance.value) {
     base.push({ label: '成本分析', icon: 'DataAnalysis', path: '/business/cost', color: '#f97316' })

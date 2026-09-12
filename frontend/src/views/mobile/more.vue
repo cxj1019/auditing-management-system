@@ -27,7 +27,7 @@ const groups = [
       { label: '发票管理', icon: 'Postcard', path: '/business/invoice' },
       { label: '收款管理', icon: 'Money', path: '/business/collection' },
       { label: '函证管理', icon: 'Memo', path: '/business/confirmation' },
-      { label: '日程管理', icon: 'Calendar', path: '/business/schedule' },
+      { label: '日程周板（滑动）', icon: 'Calendar', path: '/m/schedule' },
       { label: '汇率牌价', icon: 'Coin', path: '/business/fx' },
       { label: '成本分析', icon: 'DataAnalysis', path: '/business/cost' },
     ],
