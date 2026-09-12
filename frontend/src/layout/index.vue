@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar.vue'
 import Navbar from './components/Navbar.vue'
 import AppMain from './components/AppMain.vue'
 import { useAppStore } from '@/stores/app'
-import { computed, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 const appStore = useAppStore()
@@ -12,24 +12,43 @@ const route = useRoute()
 /** 固定模式：侧边栏常驻；自动隐藏模式：内容占满，悬停左边缘浮层展开 */
 const pinned = computed(() => appStore.sidebarPinned)
 const hovered = computed(() => appStore.sidebarHovered)
+/** 手机/窄屏：侧边栏变抽屉，不参与文档流，也不靠悬停 */
+const isMobile = computed(() => appStore.isMobile)
 
-/** 路由切换后自动收回浮层 */
+const asideVisible = computed(() =>
+  isMobile.value ? appStore.sidebarMobileOpen : pinned.value || hovered.value,
+)
+
+/** 路由切换后自动收回浮层/抽屉 */
 watch(
   () => route.path,
-  () => appStore.setSidebarHovered(false),
+  () => {
+    appStore.setSidebarHovered(false)
+    appStore.sidebarMobileOpen = false
+  },
 )
+
+onMounted(() => {
+  window.addEventListener('resize', appStore.updateIsMobile)
+  appStore.updateIsMobile()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', appStore.updateIsMobile)
+})
 </script>
 
 <template>
   <el-container class="layout">
-    <!-- 自动隐藏模式下的左边缘悬停热区 -->
-    <div v-if="!pinned" class="sidebar-hover-zone" @mouseenter="appStore.setSidebarHovered(true)" />
+    <!-- 自动隐藏模式下的左边缘悬停热区（触屏无悬停，仅桌面） -->
+    <div v-if="!isMobile && !pinned" class="sidebar-hover-zone" @mouseenter="appStore.setSidebarHovered(true)" />
+    <!-- 移动端抽屉遮罩 -->
+    <div v-if="isMobile && asideVisible" class="sidebar-mask" @click="appStore.sidebarMobileOpen = false" />
     <el-aside
-      v-show="pinned || hovered"
+      v-show="asideVisible"
       width="220px"
       class="layout-aside"
-      :class="{ 'layout-aside-overlay': !pinned }"
-      @mouseleave="appStore.setSidebarHovered(false)"
+      :class="{ 'layout-aside-overlay': !pinned || isMobile }"
+      @mouseleave="!isMobile && appStore.setSidebarHovered(false)"
     >
       <Sidebar />
     </el-aside>
@@ -55,7 +74,7 @@ watch(
   overflow-x: hidden;
 }
 
-/* 自动隐藏模式下临时展开：浮层覆盖在内容上 */
+/* 自动隐藏模式或移动端下临时展开：浮层覆盖在内容上 */
 .layout-aside-overlay {
   position: fixed;
   left: 0;
@@ -77,6 +96,14 @@ watch(
 
 .sidebar-hover-zone:hover {
   background: rgba(37, 99, 235, 0.15);
+}
+
+/* 移动端抽屉遮罩 */
+.sidebar-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .layout-header {

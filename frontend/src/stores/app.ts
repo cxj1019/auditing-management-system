@@ -13,6 +13,16 @@ export const useAppStore = defineStore('app', () => {
   const sidebarPinned = ref(loadPinned())
   /** 自动隐藏模式下，鼠标悬停临时展开（浮层） */
   const sidebarHovered = ref(false)
+  /** 窄屏（手机）模式：侧边栏变为抽屉，由汉堡按钮开关 */
+  const isMobile = ref(window.innerWidth < 768)
+  /** 移动端抽屉是否展开 */
+  const sidebarMobileOpen = ref(false)
+
+  /** 窗口尺寸变化时更新（layout 挂载 resize 监听） */
+  function updateIsMobile(): void {
+    isMobile.value = window.innerWidth < 768
+    if (!isMobile.value) sidebarMobileOpen.value = false
+  }
 
   /** 固定 ⇄ 自动隐藏（选择持久化） */
   function toggleSidebarPinned(): void {
@@ -25,5 +35,5 @@ export const useAppStore = defineStore('app', () => {
     sidebarHovered.value = value
   }
 
-  return { sidebarPinned, sidebarHovered, toggleSidebarPinned, setSidebarHovered }
+  return { sidebarPinned, sidebarHovered, isMobile, sidebarMobileOpen, updateIsMobile, toggleSidebarPinned, setSidebarHovered }
 })

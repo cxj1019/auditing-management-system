@@ -13,10 +13,15 @@ const router = useRouter()
 const userStore = useUserStore()
 const appStore = useAppStore()
 
-/** 侧边栏固定 ⇄ 自动隐藏 */
-function toggleSidebarPinned(): void {
-  appStore.toggleSidebarPinned()
-  ElMessage.success(appStore.sidebarPinned ? '侧边栏已固定' : '侧边栏已自动隐藏（鼠标移到左边缘可展开）')
+/** 侧边栏开关：手机上开关抽屉，桌面上切换 固定 ⇄ 自动隐藏 */
+const isMobile = computed(() => appStore.isMobile)
+
+function onCollapseClick(): void {
+  if (isMobile.value) {
+    appStore.sidebarMobileOpen = !appStore.sidebarMobileOpen
+  } else {
+    appStore.toggleSidebarPinned()
+  }
 }
 
 /** 面包屑标题 */
@@ -139,23 +144,16 @@ async function handleChangePassword(): Promise<void> {
 <template>
   <div class="navbar">
     <div class="navbar-left">
-      <el-icon
-        v-if="appStore.sidebarPinned"
-        class="collapse-btn"
-        title="自动隐藏侧边栏"
-        @click="toggleSidebarPinned"
-      >
-        <Fold />
-      </el-icon>
-      <el-icon v-else class="collapse-btn" title="固定侧边栏" @click="toggleSidebarPinned">
-        <Expand />
+      <el-icon class="collapse-btn" :title="isMobile ? '菜单' : (appStore.sidebarPinned ? '自动隐藏侧边栏' : '固定侧边栏')" @click="onCollapseClick">
+        <Fold v-if="isMobile ? appStore.sidebarMobileOpen : appStore.sidebarPinned" />
+        <Expand v-else />
       </el-icon>
       <span class="page-title">{{ pageTitle }}</span>
     </div>
 
     <div class="navbar-right">
       <!-- 站内通知 -->
-      <el-popover placement="bottom-end" :width="380" trigger="click" @show="toggleNotif(true)">
+      <el-popover placement="bottom-end" :width="isMobile ? 290 : 380" trigger="click" @show="toggleNotif(true)">
         <template #reference>
           <el-badge :value="unreadCount" :hidden="unreadCount <= 0" :max="99" class="notif-badge">
             <el-icon class="notif-bell"><Bell /></el-icon>
@@ -344,5 +342,29 @@ async function handleChangePassword(): Promise<void> {
 
 .user-name {
   font-size: 14px;
+}
+
+/* 窄屏：隐藏用户名与下拉箭头，只留头像；页面标题过长省略 */
+@media (max-width: 768px) {
+  .user-name,
+  .user-info .el-icon {
+    display: none;
+  }
+
+  .page-title {
+    font-size: 14px;
+    max-width: 40vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .navbar {
+    padding: 0 10px;
+  }
+
+  .navbar-right {
+    gap: 10px;
+  }
 }
 </style>
