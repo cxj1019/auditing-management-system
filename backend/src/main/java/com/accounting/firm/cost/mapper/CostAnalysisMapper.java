@@ -80,6 +80,11 @@ public interface CostAnalysisMapper {
             ORDER BY applicant_name, i.category
             </script>
             """)
+    List<com.accounting.firm.cost.dto.ExpenseStatVO> selectExpenseStats(
+            @Param("year") Integer year,
+            @Param("userIds") List<Long> userIds,
+            @Param("selfUserId") Long selfUserId);
+
     /** 近 N 月经营趋势：收入(价税分离)/报销成本/人工成本 按月聚合 */
     @Select("""
             WITH months AS (
@@ -111,9 +116,4 @@ public interface CostAnalysisMapper {
             ORDER BY m.ym
             """)
     List<java.util.Map<String, Object>> selectMonthlyTrend();
-
-    List<com.accounting.firm.cost.dto.ExpenseStatVO> selectExpenseStats(
-            @Param("year") Integer year,
-            @Param("userIds") List<Long> userIds,
-            @Param("selfUserId") Long selfUserId);
 }
