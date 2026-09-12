@@ -54,6 +54,10 @@ public class DataScopeService {
         if (user.hasRole("admin")) {
             return new Scope(ScopeType.ALL, null, null, null);
         }
+        // 财务不归属部门，但收付款/报销复核需要全所视角
+        if (user.hasRole("finance")) {
+            return new Scope(ScopeType.ALL, null, null, null);
+        }
         if (user.getDeptId() != null) {
             return new Scope(ScopeType.DEPT, user.getDeptId(), user.getUserId(), user.getUsername());
         }

@@ -4,6 +4,8 @@ import com.accounting.firm.common.api.PageResult;
 import com.accounting.firm.common.exception.BusinessException;
 import com.accounting.firm.common.security.DataScopeService;
 import com.accounting.firm.common.security.SecurityUser;
+import com.accounting.firm.system.entity.SysUser;
+import com.accounting.firm.system.mapper.SysUserMapper;
 import com.accounting.firm.project.entity.Project;
 import com.accounting.firm.project.entity.ProjectStatus;
 import com.accounting.firm.project.mapper.ProjectMapper;
@@ -31,7 +33,9 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 报销服务实现：单头 + 明细行 + 生命周期 + 二级审批 + 财务环节
@@ -47,6 +51,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
     private final com.accounting.firm.common.storage.SupabaseStorageService storageService;
     private final DataScopeService dataScopeService;
     private final com.accounting.firm.notify.service.NotifyService notifyService;
+    private final SysUserMapper sysUserMapper;
 
     /** 二级审批阈值（元）：一级批准时超过该金额转终审 */
     @Value("${reimbursement.second-approval-threshold:5000}")
@@ -57,31 +62,87 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
                                     com.accounting.firm.reimbursement.mapper.ReimbursementAttachmentMapper attachmentMapper,
                                     com.accounting.firm.common.storage.SupabaseStorageService storageService,
                                     DataScopeService dataScopeService,
-                                    com.accounting.firm.notify.service.NotifyService notifyService) {
+                                    com.accounting.firm.notify.service.NotifyService notifyService,
+                                    SysUserMapper sysUserMapper) {
         this.itemMapper = itemMapper;
         this.projectMapper = projectMapper;
         this.attachmentMapper = attachmentMapper;
         this.storageService = storageService;
         this.dataScopeService = dataScopeService;
         this.notifyService = notifyService;
+        this.sysUserMapper = sysUserMapper;
     }
 
     @Override
-    public List<ReimbursementItem> listItems(Long reimbursementId) {
+    public List<ReimbursementItem> listItems(Long reimbursementId, SecurityUser currentUser) {
+        checkVisible(reimbursementId, currentUser);
         return itemMapper.selectList(new LambdaQueryWrapper<ReimbursementItem>()
                 .eq(ReimbursementItem::getReimbursementId, reimbursementId)
                 .orderByAsc(ReimbursementItem::getId));
     }
 
     @Override
+    public void checkVisible(Long reimbursementId, SecurityUser currentUser) {
+        Reimbursement bill = getById(reimbursementId);
+        if (bill == null) {
+            throw new BusinessException("报销单不存在");
+        }
+        if (!visible(bill, currentUser)) {
+            throw new BusinessException("资源不存在");
+        }
+    }
+
+    /** 数据范围可见性：admin/财务全部；部门用户=单据归属部门（有项目看项目部门，无项目看申请人部门）；无部门仅本人 */
+    private boolean visible(Reimbursement bill, SecurityUser user) {
+        if (user.hasRole("admin") || user.hasRole("finance")) {
+            return true;
+        }
+        Long billDept = resolveDept(bill);
+        if (billDept == null) {
+            return isApplicant(bill, user);
+        }
+        return billDept.equals(user.getDeptId());
+    }
+
+    /** 单据归属部门：有项目取项目部门，否则取申请人部门；都取不到返回 null */
+    private Long resolveDept(Reimbursement bill) {
+        if (bill.getProjectId() != null) {
+            Project project = projectMapper.selectById(bill.getProjectId());
+            if (project != null && project.getDeptId() != null) {
+                return project.getDeptId();
+            }
+        }
+        if (bill.getApplicantId() != null) {
+            SysUser applicant = sysUserMapper.selectById(bill.getApplicantId());
+            if (applicant != null) {
+                return applicant.getDeptId();
+            }
+        }
+        return null;
+    }
+
+    @Override
     public PageResult<Reimbursement> pageReimbursements(long current, long size,
-                                                        Integer status, String keyword) {
+                                                        Integer status, String keyword, SecurityUser currentUser) {
         LambdaQueryWrapper<Reimbursement> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(status != null, Reimbursement::getStatus, status);
         if (StringUtils.hasText(keyword)) {
             wrapper.and(w -> w.like(Reimbursement::getApplicantName, keyword)
                     .or().like(Reimbursement::getApplicantUsername, keyword)
                     .or().like(Reimbursement::getTitle, keyword));
+        }
+        // 数据范围：admin/财务看全部；部门用户=本部门项目单 + 本部门人员无项目的单；无部门仅本人
+        if (!currentUser.hasRole("admin") && !currentUser.hasRole("finance")) {
+            var scope = dataScopeService.currentScope();
+            switch (scope.type()) {
+                case SELF -> wrapper.eq(Reimbursement::getApplicantId, scope.userId());
+                case DEPT -> wrapper.and(w -> w
+                        .inSql(Reimbursement::getProjectId, scope.projectDeptInSql())
+                        .or(w2 -> w2.isNull(Reimbursement::getProjectId)
+                                .inSql(Reimbursement::getApplicantId,
+                                        "SELECT id FROM sys_user WHERE dept_id = " + scope.deptId())));
+                default -> { /* ALL 不过滤 */ }
+            }
         }
         wrapper.orderByDesc(Reimbursement::getCreateTime);
         Page<Reimbursement> page = page(new Page<>(current, size), wrapper);
@@ -167,6 +228,33 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         }
         bill.setStatus(ReimbursementStatus.PENDING.getCode());
         updateById(bill);
+        notifyApprovers(bill);
+    }
+
+    /** 提交后实时通知可见范围内的审批人（同部门有审批权者 + admin + 财务），排除申请人 */
+    private void notifyApprovers(Reimbursement bill) {
+        try {
+            Set<Long> toNotify = new HashSet<>();
+            toNotify.addAll(notifyService.userIdsWithRole("admin"));
+            toNotify.addAll(notifyService.userIdsWithRole("finance"));
+            Long billDept = resolveDept(bill);
+            List<Long> approverIds = notifyService.userIdsWithPermission("business:reimbursement:approve");
+            if (billDept != null) {
+                List<Long> deptUserIds = sysUserMapper.selectList(
+                                new LambdaQueryWrapper<SysUser>().eq(SysUser::getDeptId, billDept))
+                        .stream().map(SysUser::getId).toList();
+                approverIds.stream().filter(deptUserIds::contains).forEach(toNotify::add);
+            }
+            toNotify.remove(bill.getApplicantId());
+            String content = "报销单 %s（%s 元，%s）待审批".formatted(
+                    bill.getReimbursementNo(), bill.getTotalAmount(), bill.getTitle());
+            for (Long approverId : toNotify) {
+                notifyService.push(approverId, "reimbursement", bill.getId(),
+                        "/business/reimbursement", "报销待审批", content);
+            }
+        } catch (Exception e) {
+            log.warn("提交报销单通知审批人失败: {}", e.getMessage());
+        }
     }
 
     @Override
@@ -213,6 +301,9 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         }
         if (isApplicant(bill, currentUser)) {
             throw new BusinessException("不能审批自己提交的报销单");
+        }
+        if (!visible(bill, currentUser)) {
+            throw new BusinessException("资源不存在");
         }
         ReimbursementStatus current = ReimbursementStatus.of(bill.getStatus());
         boolean finalReview = current == ReimbursementStatus.PENDING_FINAL;
@@ -270,10 +361,13 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
     }
 
     @Override
-    public void finance(Long id, FinanceRequest request) {
+    public void finance(Long id, FinanceRequest request, SecurityUser currentUser) {
         Reimbursement bill = getById(id);
         if (bill == null) {
             throw new BusinessException("报销单不存在");
+        }
+        if (!visible(bill, currentUser)) {
+            throw new BusinessException("资源不存在");
         }
         if (bill.getStatus() != ReimbursementStatus.APPROVED.getCode()) {
             throw new BusinessException("仅已批准的报销单可进行财务操作");
@@ -292,8 +386,27 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
     }
 
     @Override
-    public List<ReimbursementExportVO> exportItems(LocalDate startDate, LocalDate endDate) {
-        return baseMapper.selectExportItems(startDate, endDate);
+    public List<ReimbursementExportVO> exportItems(LocalDate startDate, LocalDate endDate, SecurityUser currentUser) {
+        List<ReimbursementExportVO> rows = baseMapper.selectExportItems(startDate, endDate);
+        if (currentUser.hasRole("admin") || currentUser.hasRole("finance")) {
+            return rows;
+        }
+        // 非全局视角：先按范围取可见单号集合，再过滤导出行
+        LambdaQueryWrapper<Reimbursement> wrapper = new LambdaQueryWrapper<Reimbursement>()
+                .select(Reimbursement::getReimbursementNo);
+        var scope = dataScopeService.currentScope();
+        switch (scope.type()) {
+            case SELF -> wrapper.eq(Reimbursement::getApplicantId, scope.userId());
+            case DEPT -> wrapper.and(w -> w
+                    .inSql(Reimbursement::getProjectId, scope.projectDeptInSql())
+                    .or(w2 -> w2.isNull(Reimbursement::getProjectId)
+                            .inSql(Reimbursement::getApplicantId,
+                                    "SELECT id FROM sys_user WHERE dept_id = " + scope.deptId())));
+            default -> { /* ALL */ }
+        }
+        Set<String> visibleNos = list(wrapper).stream()
+                .map(Reimbursement::getReimbursementNo).collect(java.util.stream.Collectors.toSet());
+        return rows.stream().filter(row -> visibleNos.contains(row.getReimbursementNo())).toList();
     }
 
     /** 校验单据可编辑：存在 + 草稿/已驳回 + 本人 */

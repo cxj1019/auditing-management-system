@@ -19,12 +19,15 @@ import java.util.List;
  */
 public interface ReimbursementService extends IService<Reimbursement> {
 
-    /** 查询报销单明细行清单 */
-    List<ReimbursementItem> listItems(Long reimbursementId);
+    /** 查询报销单明细行清单（校验当前用户可见性） */
+    List<ReimbursementItem> listItems(Long reimbursementId, SecurityUser currentUser);
 
-    /** 分页筛选查询报销单 */
+    /** 校验当前用户对该报销单的可见性（附件等子资源入口用），不可见抛异常 */
+    void checkVisible(Long reimbursementId, SecurityUser currentUser);
+
+    /** 分页筛选查询报销单（按数据范围隔离：admin/财务全部，部门用户本部门，无部门仅本人） */
     PageResult<Reimbursement> pageReimbursements(long current, long size,
-                                                 Integer status, String keyword);
+                                                 Integer status, String keyword, SecurityUser currentUser);
 
     /** 创建草稿（含明细行），返回草稿 ID */
     Long createDraft(ReimbursementRequest request, SecurityUser currentUser);
@@ -45,8 +48,8 @@ public interface ReimbursementService extends IService<Reimbursement> {
     void approve(Long id, ApproveRequest request, SecurityUser currentUser);
 
     /** 财务操作：receive-invoice 标记已收发票 / mark-paid 标记已付款 */
-    void finance(Long id, FinanceRequest request);
+    void finance(Long id, FinanceRequest request, SecurityUser currentUser);
 
-    /** 导出费用明细扁平行 */
-    List<ReimbursementExportVO> exportItems(LocalDate startDate, LocalDate endDate);
+    /** 导出费用明细扁平行（按数据范围隔离） */
+    List<ReimbursementExportVO> exportItems(LocalDate startDate, LocalDate endDate, SecurityUser currentUser);
 }

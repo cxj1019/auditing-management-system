@@ -50,18 +50,20 @@ public class ReimbursementController {
     /** 分页筛选查询报销单 */
     @PreAuthorize("hasAuthority('business:reimbursement:list')")
     @GetMapping
-    public ApiResult<PageResult<Reimbursement>> page(@RequestParam(defaultValue = "1") long current,
+    public ApiResult<PageResult<Reimbursement>> page(@AuthenticationPrincipal SecurityUser currentUser,
+                                                     @RequestParam(defaultValue = "1") long current,
                                                      @RequestParam(defaultValue = "10") long size,
                                                      @RequestParam(required = false) Integer status,
                                                      @RequestParam(required = false) String keyword) {
-        return ApiResult.success(reimbursementService.pageReimbursements(current, size, status, keyword));
+        return ApiResult.success(reimbursementService.pageReimbursements(current, size, status, keyword, currentUser));
     }
 
     /** 报销单明细行清单 */
     @PreAuthorize("hasAuthority('business:reimbursement:list')")
     @GetMapping("/{id}/items")
-    public ApiResult<List<com.accounting.firm.reimbursement.entity.ReimbursementItem>> items(@PathVariable Long id) {
-        return ApiResult.success(reimbursementService.listItems(id));
+    public ApiResult<List<com.accounting.firm.reimbursement.entity.ReimbursementItem>> items(@PathVariable Long id,
+                                                    @AuthenticationPrincipal SecurityUser currentUser) {
+        return ApiResult.success(reimbursementService.listItems(id, currentUser));
     }
 
     /** 创建报销单草稿（含明细行），返回草稿 ID（供明细行上传发票附件） */
@@ -130,8 +132,9 @@ public class ReimbursementController {
     @PreAuthorize("hasAuthority('business:reimbursement:finance')")
     @PutMapping("/{id}/finance")
     public ApiResult<Void> finance(@PathVariable Long id,
-                                   @Valid @RequestBody FinanceRequest request) {
-        reimbursementService.finance(id, request);
+                                   @Valid @RequestBody FinanceRequest request,
+                                   @AuthenticationPrincipal SecurityUser currentUser) {
+        reimbursementService.finance(id, request, currentUser);
         return ApiResult.success();
     }
 
@@ -140,15 +143,18 @@ public class ReimbursementController {
     @GetMapping("/export-items")
     public ApiResult<List<ReimbursementExportVO>> exportItems(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return ApiResult.success(reimbursementService.exportItems(startDate, endDate));
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @AuthenticationPrincipal SecurityUser currentUser) {
+        return ApiResult.success(reimbursementService.exportItems(startDate, endDate, currentUser));
     }
 
     /** 附件清单 */
     @PreAuthorize("hasAuthority('business:reimbursement:list')")
     @GetMapping("/{id}/attachments")
     public ApiResult<List<com.accounting.firm.reimbursement.entity.ReimbursementAttachment>> attachments(
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            @AuthenticationPrincipal SecurityUser currentUser) {
+        reimbursementService.checkVisible(id, currentUser);
         return ApiResult.success(reimbursementAttachmentService.listByReimbursementId(id));
     }
 
