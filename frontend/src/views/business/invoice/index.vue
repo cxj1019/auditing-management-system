@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import CaptureUpload from '@/components/CaptureUpload.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { UploadRequestOptions } from 'element-plus'
 import {
   pageInvoices,
   getInvoiceAging,
@@ -322,16 +322,14 @@ async function fetchAttachments(): Promise<void> {
   } finally { attLoading.value = false }
 }
 
-function makeUploader() {
-  return async (options: UploadRequestOptions) => {
-    if (!attTargetId.value) return
-    attUploading.value = true
-    try {
-      await uploadInvoiceAttachment(attTargetId.value, options.file)
-      ElMessage.success('上传成功')
-      fetchAttachments()
-    } finally { attUploading.value = false }
-  }
+async function handleUpload(files: File[]): Promise<void> {
+  if (!attTargetId.value || !files.length) return
+  attUploading.value = true
+  try {
+    for (const file of files) await uploadInvoiceAttachment(attTargetId.value, file)
+    ElMessage.success('上传成功')
+    fetchAttachments()
+  } finally { attUploading.value = false }
 }
 
 async function handleDownloadAtt(att: InvoiceAttachmentItem): Promise<void> {
@@ -627,9 +625,7 @@ onMounted(fetchList)
     <el-dialog v-model="attDialogVisible" :title="`发票扫描件 - ${attTargetNo}`" width="640px">
       <div class="items-header">
         <span class="section-title">发票扫描件</span>
-        <el-upload :show-file-list="false" :http-request="makeUploader()" accept=".pdf,.jpg,.jpeg,.png">
-          <el-button size="small" type="primary" plain :loading="attUploading">上传扫描件</el-button>
-        </el-upload>
+        <CaptureUpload :uploading="attUploading" text="上传扫描件" @pick="handleUpload" />
       </div>
       <el-table v-loading="attLoading" :data="attList" border size="small">
         <el-table-column label="文件名" min-width="220">

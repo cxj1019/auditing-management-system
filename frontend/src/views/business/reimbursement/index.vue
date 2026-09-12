@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { UploadRequestOptions } from 'element-plus'
 import { listExpenseCategories, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from '@/api/expenseCategory'
 import type { ExpenseCategoryItem, ExpenseCategoryRequest } from '@/types'
 import { restoreQuery, saveQuery } from '@/utils/queryCache'
@@ -26,7 +25,7 @@ import {
   getReimbAttPreviewUrl,
 } from '@/api/reimbursement'
 import AttachmentLink from '@/components/AttachmentLink.vue'
-import { compressImage } from '@/utils/imageCompress'
+import CaptureUpload from '@/components/CaptureUpload.vue'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { useUserStore } from '@/stores/user'
 import type {
@@ -343,11 +342,11 @@ function openRowAtt(row: ReimbursementItemData): void {
   refreshBillAtts()
 }
 
-async function handleRowUpload(options: UploadRequestOptions): Promise<void> {
-  if (!editingId.value || !rowAttTarget.value?.id) return
+async function handleRowUpload(files: File[]): Promise<void> {
+  if (!editingId.value || !rowAttTarget.value?.id || !files.length) return
   rowAttUploading.value = true
   try {
-    await uploadReimbAttachment(editingId.value, await compressImage(options.file), rowAttTarget.value.id)
+    for (const file of files) await uploadReimbAttachment(editingId.value, file, rowAttTarget.value.id)
     ElMessage.success('上传成功')
     refreshBillAtts()
   } finally {
@@ -462,11 +461,11 @@ async function fetchAttachments(id: number): Promise<void> {
   }
 }
 
-async function handleUploadAtt(options: UploadRequestOptions): Promise<void> {
-  if (!detail.value) return
+async function handleUploadAtt(files: File[]): Promise<void> {
+  if (!detail.value || !files.length) return
   attUploading.value = true
   try {
-    await uploadReimbAttachment(detail.value.id, await compressImage(options.file))
+    for (const file of files) await uploadReimbAttachment(detail.value.id, file)
     ElMessage.success('上传成功')
     fetchAttachments(detail.value.id)
   } finally {
@@ -568,11 +567,11 @@ async function handleExportPdf(): Promise<void> {
   }
 }
 
-async function handleDetailRowUpload(options: UploadRequestOptions, itemId: number): Promise<void> {
-  if (!detail.value) return
+async function handleDetailRowUpload(files: File[], itemId: number): Promise<void> {
+  if (!detail.value || !files.length) return
   attUploading.value = true
   try {
-    await uploadReimbAttachment(detail.value.id, await compressImage(options.file), itemId)
+    for (const file of files) await uploadReimbAttachment(detail.value.id, file, itemId)
     ElMessage.success('上传成功')
     await fetchAttachments(detail.value.id)
   } finally {
@@ -585,9 +584,6 @@ onMounted(() => {
   loadCategories()
 })
 
-function makeDetailRowUploader(itemId: number) {
-  return (options: UploadRequestOptions) => handleDetailRowUpload(options, itemId)
-}
 </script>
 
 <template>
@@ -817,9 +813,7 @@ function makeDetailRowUploader(itemId: number) {
       </p>
       <div class="items-header">
         <span class="section-title">附件清单</span>
-        <el-upload :show-file-list="false" :http-request="handleRowUpload" accept=".pdf,.jpg,.jpeg,.png">
-          <el-button size="small" type="primary" plain :loading="rowAttUploading">上传发票</el-button>
-        </el-upload>
+        <CaptureUpload :uploading="rowAttUploading" text="上传发票" @pick="handleRowUpload" />
       </div>
       <el-table :data="rowCountAtts(rowAttTarget?.id)" border size="small">
         <el-table-column label="file name" min-width="180">
@@ -924,15 +918,13 @@ function makeDetailRowUploader(itemId: number) {
                   </el-button>
                 </div>
                 <span v-else style="color: #9ca3af; display: inline-block; margin-bottom: 4px">暂无</span>
-                <el-upload
+                <CaptureUpload
                   v-if="canMaintainDetail"
                   v-permission="'business:reimbursement:edit'"
-                  :show-file-list="false"
-                  :http-request="makeDetailRowUploader(row.id)"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                >
-                  <el-button size="small" type="primary" plain :loading="attUploading">上传发票</el-button>
-                </el-upload>
+                  :uploading="attUploading"
+                  text="上传发票"
+                  @pick="(files: File[]) => handleDetailRowUpload(files, row.id)"
+                />
               </template>
             </el-table-column>
           </el-table>
@@ -945,15 +937,13 @@ function makeDetailRowUploader(itemId: number) {
         <div class="drawer-section">
           <div class="items-header">
             <span class="section-title">发票附件</span>
-            <el-upload
+            <CaptureUpload
               v-if="detail.status === 0 && isOwner(detail)"
               v-permission="'business:reimbursement:edit'"
-              :show-file-list="false"
-              :http-request="handleUploadAtt"
-              accept=".pdf,.jpg,.jpeg,.png"
-            >
-              <el-button size="small" type="primary" plain :loading="attUploading">上传发票</el-button>
-            </el-upload>
+              :uploading="attUploading"
+              text="上传发票"
+              @pick="handleUploadAtt"
+            />
           </div>
           <el-table v-loading="detailLoading" :data="detailAttachments" border size="small">
             <el-table-column label="file name" min-width="180">

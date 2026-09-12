@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import CaptureUpload from '@/components/CaptureUpload.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { UploadRequestOptions } from 'element-plus'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { listBusinessTypes } from '@/api/businessType'
 import { getBocRates } from '@/api/exchangeRate'
@@ -423,11 +423,11 @@ async function fetchAttachments(): Promise<void> {
   }
 }
 
-async function handleUpload(options: UploadRequestOptions): Promise<void> {
-  if (!attContractId.value) return
+async function handleUpload(files: File[]): Promise<void> {
+  if (!attContractId.value || !files.length) return
   attUploading.value = true
   try {
-    await uploadAttachment(attContractId.value, options.file)
+    for (const file of files) await uploadAttachment(attContractId.value, file)
     ElMessage.success('上传成功')
     fetchAttachments()
   } finally {
@@ -631,14 +631,13 @@ async function handleDeleteAtt(att: ContractAttachmentItem): Promise<void> {
     <el-dialog v-model="attDialogVisible" :title="`附件管理 - ${attContractNo}`" width="680px">
       <div class="table-toolbar">
         <span class="section-title">扫描件清单</span>
-        <el-upload
+        <CaptureUpload
           v-permission="'business:contract:edit'"
-          :show-file-list="false"
-          :http-request="handleUpload"
+          :uploading="attUploading"
+          text="上传扫描件"
           accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-        >
-          <el-button type="primary" :loading="attUploading">上传扫描件</el-button>
-        </el-upload>
+          @pick="handleUpload"
+        />
       </div>
 
       <el-table v-loading="attLoading" :data="attList" border stripe>
