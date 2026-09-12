@@ -44,12 +44,13 @@ const quickActions = computed(() => {
   const base = [
     { label: '我要报销', icon: 'Camera', path: '/m/reimburse', color: '#2563eb' },
     { label: '我的报销单', icon: 'Tickets', path: '/m/bills', color: '#16a34a' },
-    { label: '项目管理', icon: 'Notebook', path: '/business/project', color: '#8b5cf6' },
-    { label: '客户管理', icon: 'User', path: '/business/client', color: '#0ea5e9' },
-    { label: '合同管理', icon: 'Document', path: '/business/contract', color: '#f59e0b' },
-    { label: '发票管理', icon: 'Postcard', path: '/business/invoice', color: '#ef4444' },
-    { label: '收款管理', icon: 'Money', path: '/business/collection', color: '#10b981' },
-    { label: '函证管理', icon: 'Memo', path: '/business/confirmation', color: '#6366f1' },
+    { label: '项目管理', icon: 'Notebook', path: '/m/projects', color: '#8b5cf6' },
+    { label: '客户管理', icon: 'User', path: '/m/clients', color: '#0ea5e9' },
+    { label: '合同管理', icon: 'Document', path: '/m/contracts', color: '#f59e0b' },
+    { label: '发票管理', icon: 'Postcard', path: '/m/invoices', color: '#ef4444' },
+    { label: '收款管理', icon: 'Money', path: '/m/collections', color: '#10b981' },
+    { label: '函证管理', icon: 'Memo', path: '/m/confirmations', color: '#6366f1' },
+    { label: '汇率牌价', icon: 'Coin', path: '/m/fx', color: '#0d9488' },
     { label: '日程周板', icon: 'Calendar', path: '/m/schedule', color: '#ec4899' },
   ]
   if (canViewFinance.value) {

@@ -42,6 +42,48 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '首页' },
       },
       {
+        path: 'clients',
+        name: 'MobileClients',
+        component: () => import('@/views/mobile/clients.vue'),
+        meta: { title: '客户' },
+      },
+      {
+        path: 'projects',
+        name: 'MobileProjects',
+        component: () => import('@/views/mobile/projects.vue'),
+        meta: { title: '项目' },
+      },
+      {
+        path: 'contracts',
+        name: 'MobileContracts',
+        component: () => import('@/views/mobile/contracts.vue'),
+        meta: { title: '合同' },
+      },
+      {
+        path: 'collections',
+        name: 'MobileCollections',
+        component: () => import('@/views/mobile/collections.vue'),
+        meta: { title: '收款' },
+      },
+      {
+        path: 'confirmations',
+        name: 'MobileConfirmations',
+        component: () => import('@/views/mobile/confirmations.vue'),
+        meta: { title: '函证' },
+      },
+      {
+        path: 'invoices',
+        name: 'MobileInvoices',
+        component: () => import('@/views/mobile/invoices.vue'),
+        meta: { title: '发票' },
+      },
+      {
+        path: 'fx',
+        name: 'MobileFx',
+        component: () => import('@/views/mobile/fx.vue'),
+        meta: { title: '汇率牌价' },
+      },
+      {
         path: 'schedule',
         name: 'MobileSchedule',
         component: () => import('@/views/mobile/schedule.vue'),
