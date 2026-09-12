@@ -32,8 +32,15 @@ const TAX_RATE_PRESETS = [13, 9, 6, 3, 1.5, 0]
 const loading = ref(false)
 const keyword = ref('')
 const activeStatus = ref<number | undefined>(undefined)
+const projectFilter = ref<number | undefined>(undefined)
 const records = ref<ContractItem[]>([])
 const expandedId = ref<number | null>(null)
+
+/** 项目筛选项 */
+const projectList = ref<ProjectItem[]>([])
+const filteredRecords = computed(() =>
+  projectFilter.value ? records.value.filter((c) => c.projectId === projectFilter.value) : records.value,
+)
 
 const projectOptions = ref<ProjectItem[]>([])
 const bizDict = ref<BusinessTypeItem[]>([])
@@ -79,13 +86,21 @@ async function fetchList(): Promise<void> {
   loading.value = true
   try {
     const data = await pageContracts({
-      current: 1, size: 50,
+      current: 1, size: 200,
       status: activeStatus.value,
       clientName: keyword.value || undefined,
     })
     records.value = data.records
   } finally {
     loading.value = false
+  }
+}
+
+async function loadProjects(): Promise<void> {
+  if (!projectList.value.length) {
+    try {
+      projectList.value = await projectOptionsApi()
+    } catch { /* 忽略 */ }
   }
 }
 
@@ -211,7 +226,7 @@ async function handleSave(): Promise<void> {
   }
 }
 
-onMounted(fetchList)
+onMounted(() => { fetchList(); loadProjects() })
 </script>
 
 <template>
@@ -226,6 +241,12 @@ onMounted(fetchList)
       <el-button type="primary" @click="fetchList">查询</el-button>
     </div>
 
+    <div class="mt-project">
+      <el-select v-model="projectFilter" clearable filterable placeholder="按项目筛选" style="width: 100%" @change="expandedId = null">
+        <el-option v-for="pj in projectList" :key="pj.id" :label="`${pj.projectNo} | ${pj.name}`" :value="pj.id" />
+      </el-select>
+    </div>
+
     <div class="mt-chips">
       <span
         v-for="f in statusFilters"
@@ -236,9 +257,9 @@ onMounted(fetchList)
       >{{ f.label }}</span>
     </div>
 
-    <div v-if="!loading && !records.length" class="mt-empty">没有找到合同</div>
+    <div v-if="!loading && !filteredRecords.length" class="mt-empty">没有找到合同</div>
 
-    <div v-for="c in records" :key="c.id" class="mt-card">
+    <div v-for="c in filteredRecords" :key="c.id" class="mt-card">
       <div class="mt-card-head" @click="toggle(c)">
         <span class="mt-name">{{ c.clientName || c.contractNo }}</span>
         <el-tag :type="statusTypes[c.status]" size="small">{{ statusLabels[c.status] }}</el-tag>
@@ -325,6 +346,7 @@ onMounted(fetchList)
 .mt-title { font-size: 18px; font-weight: 600; }
 .mt-search { display: flex; gap: 8px; margin-bottom: 10px; }
 .mt-search .el-input { flex: 1; }
+.mt-project { margin-bottom: 8px; }
 .mt-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 10px; }
 .mt-chip { flex-shrink: 0; padding: 4px 12px; border-radius: 999px; background: #fff; border: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; cursor: pointer; }
 .mt-chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }

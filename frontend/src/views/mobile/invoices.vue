@@ -3,8 +3,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pageInvoices, createInvoice, updateInvoice, changeInvoiceStatus } from '@/api/invoice'
 import { getContractOptions } from '@/api/contract'
+import { projectOptions as projectOptionsApi } from '@/api/project'
 import { useUserStore } from '@/stores/user'
-import type { ContractOptionItem, InvoiceItem, InvoiceRequest } from '@/types'
+import type { ContractOptionItem, InvoiceItem, InvoiceRequest, ProjectItem } from '@/types'
 
 /** 手机端发票：列表 + 登记/编辑 + 开票流转（编辑不可换合同，作废后不可编辑，与桌面一致） */
 const userStore = useUserStore()
@@ -29,8 +30,17 @@ const canTransit = computed(() => userStore.hasPermission('business:invoice:stat
 const loading = ref(false)
 const keyword = ref('')
 const activeStatus = ref<number | undefined>(undefined)
+const projectFilter = ref<number | undefined>(undefined)
 const records = ref<InvoiceItem[]>([])
 const expandedId = ref<number | null>(null)
+
+const projectList = ref<ProjectItem[]>([])
+/** 发票行只带 projectNo，按编号与所选项目匹配 */
+const filteredRecords = computed(() => {
+  if (!projectFilter.value) return records.value
+  const no = projectList.value.find((p) => p.id === projectFilter.value)?.projectNo
+  return no ? records.value.filter((i) => i.projectNo === no) : records.value
+})
 
 const contractOptions = ref<ContractOptionItem[]>([])
 
@@ -50,7 +60,7 @@ async function fetchList(): Promise<void> {
   loading.value = true
   try {
     const data = await pageInvoices({
-      current: 1, size: 50,
+      current: 1, size: 200,
       status: activeStatus.value,
       keyword: keyword.value || undefined,
     })
@@ -231,7 +241,15 @@ function formFromRow(inv: InvoiceItem): InvoiceRequest {
   }
 }
 
-onMounted(fetchList)
+async function loadProjects(): Promise<void> {
+  if (!projectList.value.length) {
+    try {
+      projectList.value = await projectOptionsApi()
+    } catch { /* 忽略 */ }
+  }
+}
+
+onMounted(() => { fetchList(); loadProjects() })
 </script>
 
 <template>
@@ -246,6 +264,12 @@ onMounted(fetchList)
       <el-button type="primary" @click="fetchList">查询</el-button>
     </div>
 
+    <div class="mi-project">
+      <el-select v-model="projectFilter" clearable filterable placeholder="按项目筛选" style="width: 100%" @change="expandedId = null">
+        <el-option v-for="pj in projectList" :key="pj.id" :label="`${pj.projectNo} | ${pj.name}`" :value="pj.id" />
+      </el-select>
+    </div>
+
     <div class="mi-chips">
       <span
         v-for="f in statusFilters"
@@ -256,9 +280,9 @@ onMounted(fetchList)
       >{{ f.label }}</span>
     </div>
 
-    <div v-if="!loading && !records.length" class="mi-empty">没有找到发票</div>
+    <div v-if="!loading && !filteredRecords.length" class="mi-empty">没有找到发票</div>
 
-    <div v-for="inv in records" :key="inv.id" class="mi-card">
+    <div v-for="inv in filteredRecords" :key="inv.id" class="mi-card">
       <div class="mi-card-head" @click="expandedId = expandedId === inv.id ? null : inv.id">
         <span class="mi-name">{{ inv.clientName || inv.contractNo }}</span>
         <el-tag :type="statusTypes[inv.status]" size="small">{{ statusLabels[inv.status] }}</el-tag>
@@ -337,6 +361,7 @@ onMounted(fetchList)
 .mi-title { font-size: 18px; font-weight: 600; }
 .mi-search { display: flex; gap: 8px; margin-bottom: 10px; }
 .mi-search .el-input { flex: 1; }
+.mi-project { margin-bottom: 8px; }
 .mi-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 10px; }
 .mi-chip { flex-shrink: 0; padding: 4px 12px; border-radius: 999px; background: #fff; border: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; cursor: pointer; }
 .mi-chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }

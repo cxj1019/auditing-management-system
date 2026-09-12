@@ -2,9 +2,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCollectionSummary, addPayment } from '@/api/collection'
-import { getContractOptions } from '@/api/contract'
+import { getContractOptions, pageContracts } from '@/api/contract'
+import { projectOptions as projectOptionsApi } from '@/api/project'
 import { useUserStore } from '@/stores/user'
-import type { CollectionSummaryItem, ContractOptionItem } from '@/types'
+import type { CollectionSummaryItem, ContractItem, ContractOptionItem, ProjectItem } from '@/types'
 
 /** 手机端收款：合同维度汇总 + 登记收款 */
 const userStore = useUserStore()
@@ -15,10 +16,18 @@ const paymentMethods = ['转账', '现金', '支票', '其他']
 
 const loading = ref(false)
 const keyword = ref('')
+const projectFilter = ref<number | undefined>(undefined)
 const records = ref<CollectionSummaryItem[]>([])
 const expandedId = ref<number | null>(null)
 
 const contractOptions = ref<ContractOptionItem[]>([])
+const projectList = ref<ProjectItem[]>([])
+/** 合同 → 项目 映射（汇总行不带项目信息，用它过滤） */
+const contractProjectMap = ref<Map<number, number>>(new Map())
+
+const filteredRecords = computed(() =>
+  projectFilter.value ? records.value.filter((c) => contractProjectMap.value.get(c.contractId) === projectFilter.value) : records.value,
+)
 
 function money(v?: number): string {
   return v == null ? '—' : Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
@@ -34,6 +43,20 @@ async function fetchList(): Promise<void> {
     records.value = await getCollectionSummary(keyword.value || undefined)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadProjects(): Promise<void> {
+  if (!projectList.value.length) {
+    try {
+      projectList.value = await projectOptionsApi()
+    } catch { /* 忽略 */ }
+  }
+  if (!contractProjectMap.value.size) {
+    try {
+      const contracts: ContractItem[] = (await pageContracts({ current: 1, size: 200 })).records
+      contractProjectMap.value = new Map(contracts.map((c) => [c.id, c.projectId]))
+    } catch { /* 忽略 */ }
   }
 }
 
@@ -79,7 +102,7 @@ async function handleSave(): Promise<void> {
   }
 }
 
-onMounted(fetchList)
+onMounted(() => { fetchList(); loadProjects() })
 </script>
 
 <template>
@@ -94,9 +117,15 @@ onMounted(fetchList)
       <el-button type="primary" @click="fetchList">查询</el-button>
     </div>
 
-    <div v-if="!loading && !records.length" class="ml-empty">暂无收款数据</div>
+    <div class="ml-project">
+      <el-select v-model="projectFilter" clearable filterable placeholder="按项目筛选" style="width: 100%" @change="expandedId = null">
+        <el-option v-for="pj in projectList" :key="pj.id" :label="`${pj.projectNo} | ${pj.name}`" :value="pj.id" />
+      </el-select>
+    </div>
 
-    <div v-for="(c, i) in records" :key="i" class="ml-card">
+    <div v-if="!loading && !filteredRecords.length" class="ml-empty">暂无收款数据</div>
+
+    <div v-for="(c, i) in filteredRecords" :key="i" class="ml-card">
       <div class="ml-card-head" @click="expandedId = expandedId === i ? null : i">
         <span class="ml-name">{{ c.clientName || c.contractNo }}</span>
         <span class="ml-amount">¥ {{ money(c.totalCollected) }}</span>
@@ -154,6 +183,7 @@ onMounted(fetchList)
 .ml-page { max-width: 640px; margin: 0 auto; padding: 14px 12px; }
 .ml-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .ml-title { font-size: 18px; font-weight: 600; }
+.ml-project { margin-bottom: 8px; }
 .ml-search { display: flex; gap: 8px; margin-bottom: 10px; }
 .ml-search .el-input { flex: 1; }
 .ml-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-bottom: 10px; }

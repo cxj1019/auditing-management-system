@@ -32,6 +32,7 @@ const canTransit = computed(() => userStore.hasPermission('business:confirmation
 const loading = ref(false)
 const keyword = ref('')
 const activeStatus = ref<number | undefined>(undefined)
+const projectFilter = ref<number | undefined>(undefined)
 const records = ref<ConfirmationItem[]>([])
 const expandedId = ref<number | null>(null)
 
@@ -78,9 +79,10 @@ async function fetchList(): Promise<void> {
   loading.value = true
   try {
     const data = await pageConfirmations({
-      current: 1, size: 50,
+      current: 1, size: 200,
       status: activeStatus.value,
       keyword: keyword.value || undefined,
+      projectId: projectFilter.value,
     })
     records.value = data.records
   } finally {
@@ -90,6 +92,11 @@ async function fetchList(): Promise<void> {
 
 function switchStatus(v: number | undefined): void {
   activeStatus.value = v
+  expandedId.value = null
+  fetchList()
+}
+
+function onProjectFilter(): void {
   expandedId.value = null
   fetchList()
 }
@@ -236,6 +243,12 @@ onMounted(fetchList)
       <el-button type="primary" @click="fetchList">查询</el-button>
     </div>
 
+    <div class="mf-project">
+      <el-select v-model="projectFilter" clearable filterable placeholder="按项目筛选" style="width: 100%" @change="onProjectFilter">
+        <el-option v-for="pj in projectOptions" :key="pj.id" :label="`${pj.projectNo} | ${pj.name}`" :value="pj.id" />
+      </el-select>
+    </div>
+
     <div class="mf-chips">
       <span
         v-for="f in statusFilters"
@@ -331,6 +344,7 @@ onMounted(fetchList)
 .mf-title { font-size: 18px; font-weight: 600; }
 .mf-search { display: flex; gap: 8px; margin-bottom: 10px; }
 .mf-search .el-input { flex: 1; }
+.mf-project { margin-bottom: 8px; }
 .mf-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 10px; }
 .mf-chip { flex-shrink: 0; padding: 4px 12px; border-radius: 999px; background: #fff; border: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; cursor: pointer; }
 .mf-chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }

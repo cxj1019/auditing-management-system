@@ -41,6 +41,7 @@ const form = reactive({
 })
 
 const canCreate = computed(() => userStore.hasPermission('business:reimbursement:add'))
+const canApprove = computed(() => userStore.hasPermission('business:reimbursement:approve'))
 
 function emptyItem(): ReimbursementItemData {
   return {
@@ -255,7 +256,7 @@ onMounted(() => {
   <div class="m-page">
     <div class="m-header">
       <span class="m-title">{{ editingExisting ? '编辑报销单' : '我要报销' }}</span>
-      <el-button v-if="canCreate" size="small" text type="primary" @click="router.push('/m/approval')">我的审批</el-button>
+      <el-button v-if="canCreate && canApprove" size="small" text type="primary" @click="router.push('/m/approval')">我的审批</el-button>
     </div>
 
     <div v-if="!canCreate" class="m-empty">您没有新建报销的权限</div>
