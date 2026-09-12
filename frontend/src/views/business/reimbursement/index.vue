@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { listExpenseCategories, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from '@/api/expenseCategory'
 import type { ExpenseCategoryItem, ExpenseCategoryRequest } from '@/types'
 import { restoreQuery, saveQuery } from '@/utils/queryCache'
+import { useRoute } from 'vue-router'
 import * as XLSX from 'xlsx'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
@@ -38,6 +39,7 @@ import type {
 } from '@/types'
 
 const userStore = useUserStore()
+const route = useRoute()
 // 费用类别字典（系统管理员可在类别设置中增删改）
 const FALLBACK_CATEGORIES = ['差旅费', '交通费', '办公费', '餐饮费', '其他']
 /** 常用税率预设（%），也支持手输自定义税率 */
@@ -580,6 +582,9 @@ async function handleDetailRowUpload(files: File[], itemId: number): Promise<voi
 }
 
 onMounted(() => {
+  // 支持外部深链（如手机端跳转）：?keyword=BX2026... 直接带入搜索
+  const kw = route.query.keyword
+  if (typeof kw === 'string' && kw) query.keyword = kw
   fetchList()
   loadCategories()
 })

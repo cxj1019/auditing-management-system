@@ -30,18 +30,42 @@ export const constantRoutes: RouteRecordRaw[] = [
     ],
   },
   {
-    // 移动端报销审批视图：手机浏览器直接访问，卡片式审批
-    path: '/m/approval',
-    name: 'MobileApproval',
-    component: () => import('@/views/business/reimbursement/mobile.vue'),
-    meta: { title: '报销审批' },
-  },
-  {
-    // 移动端快速报销：调用手机摄像头拍照上传发票，卡片式填单
-    path: '/m/reimburse',
-    name: 'MobileReimburse',
-    component: () => import('@/views/business/reimbursement/mobileSubmit.vue'),
-    meta: { title: '我要报销' },
+    // 手机端独立布局：底部标签栏导航，与桌面侧边栏布局完全分离
+    path: '/m',
+    component: () => import('@/layout/MobileLayout.vue'),
+    redirect: '/m/home',
+    children: [
+      {
+        path: 'home',
+        name: 'MobileHome',
+        component: () => import('@/views/mobile/home.vue'),
+        meta: { title: '首页' },
+      },
+      {
+        path: 'bills',
+        name: 'MobileBills',
+        component: () => import('@/views/mobile/bills.vue'),
+        meta: { title: '报销单' },
+      },
+      {
+        path: 'reimburse',
+        name: 'MobileReimburse',
+        component: () => import('@/views/business/reimbursement/mobileSubmit.vue'),
+        meta: { title: '我要报销' },
+      },
+      {
+        path: 'approval',
+        name: 'MobileApproval',
+        component: () => import('@/views/business/reimbursement/mobile.vue'),
+        meta: { title: '报销审批' },
+      },
+      {
+        path: 'more',
+        name: 'MobileMore',
+        component: () => import('@/views/mobile/more.vue'),
+        meta: { title: '更多' },
+      },
+    ],
   },
   {
     path: '/:pathMatch(.*)*',
@@ -68,6 +92,11 @@ router.beforeEach(async (to) => {
   const token = getToken()
   if (!token) {
     return { path: '/login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
+  }
+
+  // 手机访问根路径直接进移动端首页（独立布局）
+  if (to.path === '/' && window.innerWidth < 768) {
+    return { path: '/m/home' }
   }
 
   // 已登录但未加载用户信息：拉取信息并按权限注册模块路由

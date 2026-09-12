@@ -316,7 +316,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.m-page { max-width: 640px; margin: 0 auto; padding: 12px; padding-bottom: 90px; }
+.m-page { max-width: 640px; margin: 0 auto; padding: 12px; padding-bottom: 160px; }
 .m-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .m-title { font-size: 18px; font-weight: 600; }
 .m-draft-tip { color: #e6a23c; font-size: 13px; margin-bottom: 10px; }
@@ -335,7 +335,7 @@ onMounted(() => {
 .m-att { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #374151; padding: 3px 0; }
 .m-att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-add { width: 100%; margin-bottom: 12px; }
-.m-footer { position: fixed; bottom: 0; left: 0; right: 0; max-width: 640px; margin: 0 auto; background: #fff; border-top: 1px solid #e5e7eb; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
+.m-footer { position: fixed; bottom: calc(54px + env(safe-area-inset-bottom)); left: 0; right: 0; max-width: 640px; margin: 0 auto; background: #fff; border-top: 1px solid #e5e7eb; box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04); padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
 .m-total { font-size: 14px; }
 .m-total b { color: #f56c6c; font-size: 17px; }
 .m-footer-btns { display: flex; gap: 8px; }
