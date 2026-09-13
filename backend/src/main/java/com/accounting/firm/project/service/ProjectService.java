@@ -1,6 +1,7 @@
 package com.accounting.firm.project.service;
 
 import com.accounting.firm.common.api.PageResult;
+import com.accounting.firm.common.security.SecurityUser;
 import com.accounting.firm.project.dto.ProjectOptionVO;
 import com.accounting.firm.project.dto.ProjectRequest;
 import com.accounting.firm.project.entity.Project;
@@ -46,5 +47,5 @@ public interface ProjectService extends IService<Project> {
      * @param id     项目 ID
      * @param action 动作：finish-完成 reopen-重开 archive-归档
      */
-    void changeStatus(Long id, String action);
+    void changeStatus(Long id, String action, SecurityUser currentUser);
 }

@@ -2,6 +2,7 @@ package com.accounting.firm.project.controller;
 
 import com.accounting.firm.common.aop.AuditLog;
 import com.accounting.firm.common.api.ApiResult;
+import com.accounting.firm.common.security.SecurityUser;
 import com.accounting.firm.common.api.PageResult;
 import com.accounting.firm.project.dto.ProjectOptionVO;
 import com.accounting.firm.project.dto.ProjectRequest;
@@ -10,6 +11,7 @@ import com.accounting.firm.project.service.ProjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -115,8 +117,9 @@ public class ProjectController {
     @AuditLog("项目状态流转")
     @PreAuthorize("hasAuthority('business:project:status')")
     @PutMapping("/{id}/status")
-    public ApiResult<Void> changeStatus(@PathVariable Long id, @RequestParam String action) {
-        projectService.changeStatus(id, action);
+    public ApiResult<Void> changeStatus(@PathVariable Long id, @RequestParam String action,
+                                        @AuthenticationPrincipal SecurityUser currentUser) {
+        projectService.changeStatus(id, action, currentUser);
         return ApiResult.success();
     }
 }

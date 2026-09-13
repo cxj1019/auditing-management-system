@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.accounting.firm.common.api.PageResult;
 import com.accounting.firm.common.exception.BusinessException;
 import com.accounting.firm.common.security.DataScopeService;
+import com.accounting.firm.common.security.SecurityUser;
 import com.accounting.firm.common.security.DataScopeService.ScopeType;
 import com.accounting.firm.contract.entity.Contract;
 import com.accounting.firm.contract.mapper.ContractMapper;
@@ -186,7 +187,7 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
     }
 
     @Override
-    public void changeStatus(Long id, String action) {
+    public void changeStatus(Long id, String action, SecurityUser currentUser) {
         Project project = getById(id);
         if (project == null) {
             throw new BusinessException("项目不存在");
@@ -198,6 +199,15 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
             case "archive" -> ProjectStatus.ARCHIVED;
             default -> throw new BusinessException("非法的流转动作");
         };
+        // 误归档兜底：管理员可重开已归档项目
+        if (current == ProjectStatus.ARCHIVED && target == ProjectStatus.IN_PROGRESS) {
+            if (currentUser == null || !currentUser.hasRole("admin")) {
+                throw new BusinessException("已归档的项目仅系统管理员可重开");
+            }
+            project.setStatus(target.getCode());
+            updateById(project);
+            return;
+        }
         current.transitionTo(target);
         project.setStatus(target.getCode());
         updateById(project);
