@@ -789,7 +789,14 @@ onMounted(() => {
 .schedule-full { padding: 0; }
 .schedule-full :deep(.el-card) { border: none; border-radius: 0; box-shadow: none; }
 .schedule-full :deep(.el-card__body) { padding: 0; }
-.schedule-full .toolbar { padding: 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); background: var(--el-bg-color); }
+.schedule-full .toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
+}
 .schedule-full :deep(.el-card) { overflow: visible; }
 .schedule-full { overflow: visible; }
 .schedule-full .week-grid { border-right: none; }
@@ -814,7 +821,7 @@ onMounted(() => {
 }
 .grid-header {
   position: sticky;
-  top: 0;
+  top: 57px;
   z-index: 5;
   padding: 10px 8px;
   text-align: center;
