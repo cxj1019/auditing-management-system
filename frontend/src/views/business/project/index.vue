@@ -166,6 +166,7 @@ function openEdit(row: ProjectItem): void {
     siteLeaderName: row.siteLeaderName,
     startDate: row.startDate,
     endDate: row.endDate,
+    budgetHours: row.budgetHours ?? undefined,
     remark: row.remark,
   })
   loadUserOptions()
@@ -464,6 +465,9 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
           <el-date-picker v-model="form.startDate" type="date" value-format="YYYY-MM-DD" placeholder="开始日期（可选）" style="width: 48%" />
           <span style="margin: 0 4px">至</span>
           <el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" placeholder="结束日期（可选）" style="width: 48%" />
+        </el-form-item>
+        <el-form-item label="预算工时">
+          <el-input-number v-model="form.budgetHours" :min="0" :max="99999" :precision="1" :controls="false" style="width: 48%" placeholder="可选，用于工时消耗对比" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" placeholder="备注（可选）" />
