@@ -91,6 +91,7 @@ public class VendorPayment implements Serializable {
     private String projectName;
 
     /** 非数据库字段：已核销金额（同一进项发票的付款合计，列表展示用，付款场景不填） */
+    @TableField(exist = false)
     private java.math.BigDecimal paidAmount;
 
     /** 非数据库字段：合同编号 */
