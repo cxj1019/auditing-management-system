@@ -300,7 +300,8 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
                 line.setProjectId(projectId);
                 line.setStaffLevelId(item.getStaffLevelId());
                 line.setHeadcount(item.getHeadcount() == null || item.getHeadcount() < 1 ? 1 : item.getHeadcount());
-                line.setHoursPerPerson(item.getHoursPerPerson() == null ? java.math.BigDecimal.ZERO : item.getHoursPerPerson());
+                line.setHoursPerPerson(item.getHoursPerPerson() == null || item.getHoursPerPerson().signum() < 0
+                        ? java.math.BigDecimal.ZERO : item.getHoursPerPerson());
                 projectBudgetMapper.insert(line);
                 total = total.add(java.math.BigDecimal.valueOf(line.getHeadcount()).multiply(line.getHoursPerPerson()));
             }
