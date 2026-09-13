@@ -12,8 +12,9 @@
 
 <style scoped>
 .app-main {
-  padding: 16px;
+  /* 全窗口铺满：无内边距；滚动统一交给外层 el-main（唯一滚动条），sticky 表头相对它吸附 */
+  padding: 0;
   height: 100%;
-  overflow-y: auto;
+  overflow-y: visible;
 }
 </style>
