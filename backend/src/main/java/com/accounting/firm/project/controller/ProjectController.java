@@ -50,6 +50,22 @@ public class ProjectController {
         return ApiResult.success(projectService.pageProjects(current, size, status, type, keyword, startDate, endDate, hasReport));
     }
 
+    /** 项目预算明细（级别×人数×每人工时） */
+    @PreAuthorize("hasAuthority('business:project:list')")
+    @GetMapping("/{id}/budget")
+    public ApiResult<List<java.util.Map<String, Object>>> getBudget(@PathVariable Long id) {
+        return ApiResult.success(projectService.getBudget(id));
+    }
+
+    /** 保存项目预算明细（汇总总预算写入项目） */
+    @AuditLog("保存项目预算")
+    @PreAuthorize("hasAuthority('business:project:edit')")
+    @PutMapping("/{id}/budget")
+    public ApiResult<java.math.BigDecimal> saveBudget(@PathVariable Long id,
+                                                      @RequestBody List<com.accounting.firm.project.dto.ProjectBudgetItem> lines) {
+        return ApiResult.success(projectService.saveBudget(id, lines));
+    }
+
     /** 报告登记：登记/修改项目报告文号等信息 */
     @AuditLog("项目报告登记")
     @PreAuthorize("hasAuthority('business:project:edit')")

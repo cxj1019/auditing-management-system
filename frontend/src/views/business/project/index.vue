@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { pageProjects, createProject, updateProjectReport, updateProject, deleteProject, changeProjectStatus, listProjectMembers, addProjectMember, removeProjectMember } from '@/api/project'
+import { pageProjects, createProject, updateProjectReport, updateProject, deleteProject, changeProjectStatus, listProjectMembers, addProjectMember, removeProjectMember, getProjectBudget, saveProjectBudget } from '@/api/project'
+import { getStaffLevels } from '@/api/cost'
 import { pageClients } from '@/api/client'
 import { getUserOptions, getDepartmentOptions } from '@/api/user'
 import { useUserStore } from '@/stores/user'
@@ -112,9 +113,44 @@ const form = reactive<ProjectRequest>({
   siteLeaderName: '',
   startDate: '',
   endDate: '',
-  budgetHours: undefined,
   remark: '',
 })
+/** 预算工时明细：级别 × 人数 × 每人工时（总预算自动汇总） */
+const budgetLines = ref<{ staffLevelId: number | null; headcount: number; hoursPerPerson: number }[]>([])
+const levelOptions = ref<{ id?: number; name: string; hourlyRate: number }[]>([])
+const budgetTotal = computed(() =>
+  budgetLines.value.reduce((s, l) => s + (l.headcount || 0) * (l.hoursPerPerson || 0), 0))
+
+function addBudgetLine(): void {
+  budgetLines.value.push({ staffLevelId: null, headcount: 1, hoursPerPerson: 0 })
+}
+
+function removeBudgetLine(index: number): void {
+  budgetLines.value.splice(index, 1)
+}
+
+async function loadBudget(projectId: number): Promise<void> {
+  try {
+    budgetLines.value = (await getProjectBudget(projectId)).map((l) => ({
+      staffLevelId: l.staffLevelId, headcount: l.headcount, hoursPerPerson: Number(l.hoursPerPerson),
+    }))
+  } catch {
+    budgetLines.value = []
+  }
+}
+
+async function saveBudgetLines(projectId: number): Promise<void> {
+  const lines = budgetLines.value.filter((l) => l.staffLevelId)
+  await saveProjectBudget(projectId, lines)
+}
+
+async function loadLevels(): Promise<void> {
+  if (!levelOptions.value.length) {
+    try {
+      levelOptions.value = await getStaffLevels()
+    } catch { /* 级别选项失败时仍可用其他功能 */ }
+  }
+}
 /** 在册人员选项（供项目经理/现场负责人下拉选择） */
 const userOptions = ref<UserOption[]>([])
 const clientOptions = ref<ClientItem[]>([])
@@ -144,7 +180,9 @@ async function loadUserOptions(): Promise<void> {
 function openCreate(): void {
   isEdit.value = false
   // 默认归属创建人所在部门，可改选
-  Object.assign(form, { id: undefined, name: '', type: '', bizNature: '收入型', bizType: '', clientId: 0, deptId: userStore.deptId ?? 0, managerName: '', siteLeaderName: '', startDate: '', endDate: '', budgetHours: undefined, remark: '' })
+  Object.assign(form, { id: undefined, name: '', type: '', bizNature: '收入型', bizType: '', clientId: 0, deptId: userStore.deptId ?? 0, managerName: '', siteLeaderName: '', startDate: '', endDate: '', remark: '' })
+  budgetLines.value = []
+  loadLevels()
   loadUserOptions()
   loadClientOptions()
   loadDeptOptions()
@@ -166,9 +204,10 @@ function openEdit(row: ProjectItem): void {
     siteLeaderName: row.siteLeaderName,
     startDate: row.startDate,
     endDate: row.endDate,
-    budgetHours: row.budgetHours ?? undefined,
     remark: row.remark,
   })
+  loadLevels()
+  loadBudget(row.id)
   loadUserOptions()
   loadClientOptions()
   loadDeptOptions()
@@ -184,13 +223,19 @@ async function handleSave(): Promise<void> {
   }
   saving.value = true
   try {
+    let projectId = form.id
     if (isEdit.value) {
       await updateProject(form)
-      ElMessage.success('修改成功')
     } else {
       await createProject(form)
-      ElMessage.success('登记成功')
+      // 新建后取回编号定位（列表第一条即新项目）
+      const fresh = (await pageProjects({ current: 1, size: 1, keyword: '' })).records[0]
+      projectId = fresh?.id ?? null
     }
+    if (projectId) {
+      await saveBudgetLines(projectId)
+    }
+    ElMessage.success(isEdit.value ? '修改成功' : '登记成功')
     dialogVisible.value = false
     fetchList()
   } finally {
@@ -466,8 +511,21 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
           <span style="margin: 0 4px">至</span>
           <el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" placeholder="结束日期（可选）" style="width: 48%" />
         </el-form-item>
-        <el-form-item label="预算工时">
-          <el-input-number v-model="form.budgetHours" :min="0" :max="99999" :precision="1" :controls="false" style="width: 48%" placeholder="可选，用于工时消耗对比" />
+        <el-form-item label="预算工时（按级别）">
+          <div style="width: 100%">
+            <div v-for="(line, bi) in budgetLines" :key="bi" style="display: flex; gap: 8px; margin-bottom: 6px; align-items: center">
+              <el-select v-model="line.staffLevelId" placeholder="级别" size="small" style="width: 40%">
+                <el-option v-for="lv in levelOptions" :key="lv.id" :label="lv.name" :value="lv.id" />
+              </el-select>
+              <el-input-number v-model="line.headcount" :min="1" :precision="0" :controls="false" size="small" style="width: 26%" placeholder="人数" />
+              <el-input-number v-model="line.hoursPerPerson" :min="0" :precision="1" :controls="false" size="small" style="width: 26%" placeholder="每人工时" />
+              <el-button link type="danger" size="small" @click="removeBudgetLine(bi)">删除</el-button>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center">
+              <el-button size="small" @click="addBudgetLine">＋ 加一级</el-button>
+              <span style="font-size: 13px; color: #374151">预算合计：<b>{{ budgetTotal.toFixed(1) }}</b> 小时</span>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" placeholder="备注（可选）" />

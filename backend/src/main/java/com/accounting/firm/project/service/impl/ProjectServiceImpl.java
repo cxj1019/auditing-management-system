@@ -2,6 +2,7 @@ package com.accounting.firm.project.service.impl;
 
 import com.accounting.firm.client.entity.Client;
 import com.accounting.firm.client.mapper.ClientMapper;
+import org.springframework.transaction.annotation.Transactional;
 import com.accounting.firm.common.api.PageResult;
 import com.accounting.firm.common.exception.BusinessException;
 import com.accounting.firm.common.security.DataScopeService;
@@ -12,6 +13,7 @@ import com.accounting.firm.project.dto.ProjectOptionVO;
 import com.accounting.firm.project.dto.ProjectRequest;
 import com.accounting.firm.project.entity.Project;
 import com.accounting.firm.project.entity.ProjectStatus;
+import com.accounting.firm.project.mapper.ProjectBudgetMapper;
 import com.accounting.firm.project.mapper.ProjectMapper;
 import com.accounting.firm.project.service.ProjectNoGenerator;
 import com.accounting.firm.project.service.ProjectService;
@@ -36,11 +38,16 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
     private final ContractMapper contractMapper;
     private final DataScopeService dataScopeService;
     private final ClientMapper clientMapper;
+    private final ProjectBudgetMapper projectBudgetMapper;
+    private final com.accounting.firm.system.mapper.StaffLevelMapper staffLevelMapper;
 
-    public ProjectServiceImpl(@Lazy ContractMapper contractMapper, DataScopeService dataScopeService, ClientMapper clientMapper) {
+    public ProjectServiceImpl(@Lazy ContractMapper contractMapper, DataScopeService dataScopeService, ClientMapper clientMapper,
+                              ProjectBudgetMapper projectBudgetMapper, com.accounting.firm.system.mapper.StaffLevelMapper staffLevelMapper) {
         this.contractMapper = contractMapper;
         this.dataScopeService = dataScopeService;
         this.clientMapper = clientMapper;
+        this.projectBudgetMapper = projectBudgetMapper;
+        this.staffLevelMapper = staffLevelMapper;
     }
 
     @Override
@@ -240,7 +247,66 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         project.setSiteLeaderName(request.getSiteLeaderName());
         project.setStartDate(request.getStartDate());
         project.setEndDate(request.getEndDate());
-        project.setBudgetHours(request.getBudgetHours());
         project.setRemark(request.getRemark());
+    }
+
+    @Override
+    public List<java.util.Map<String, Object>> getBudget(Long projectId) {
+        List<com.accounting.firm.project.entity.ProjectBudget> lines = projectBudgetMapper.selectList(
+                new LambdaQueryWrapper<com.accounting.firm.project.entity.ProjectBudget>()
+                        .eq(com.accounting.firm.project.entity.ProjectBudget::getProjectId, projectId)
+                        .orderByAsc(com.accounting.firm.project.entity.ProjectBudget::getId));
+        List<Long> levelIds = lines.stream()
+                .map(com.accounting.firm.project.entity.ProjectBudget::getStaffLevelId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        Map<Long, String> levelNames = levelIds.isEmpty() ? Map.of()
+                : staffLevelMapper.selectBatchIds(levelIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                com.accounting.firm.system.entity.StaffLevel::getId,
+                                com.accounting.firm.system.entity.StaffLevel::getName));
+        List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
+        for (var line : lines) {
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("id", line.getId());
+            row.put("staffLevelId", line.getStaffLevelId());
+            row.put("levelName", levelNames.getOrDefault(line.getStaffLevelId(), "未知级别"));
+            row.put("headcount", line.getHeadcount());
+            row.put("hoursPerPerson", line.getHoursPerPerson());
+            row.put("totalHours", java.math.BigDecimal.valueOf(
+                    line.getHeadcount() == null ? 0 : line.getHeadcount())
+                    .multiply(line.getHoursPerPerson() == null ? java.math.BigDecimal.ZERO : line.getHoursPerPerson()));
+            result.add(row);
+        }
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public java.math.BigDecimal saveBudget(Long projectId, List<com.accounting.firm.project.dto.ProjectBudgetItem> lines) {
+        Project project = getById(projectId);
+        if (project == null) {
+            throw new BusinessException("项目不存在");
+        }
+        if (ProjectStatus.of(project.getStatus()).isFinal()) {
+            throw new BusinessException("已归档的项目不可修改预算");
+        }
+        projectBudgetMapper.delete(new LambdaQueryWrapper<com.accounting.firm.project.entity.ProjectBudget>()
+                .eq(com.accounting.firm.project.entity.ProjectBudget::getProjectId, projectId));
+        java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+        if (lines != null) {
+            for (var item : lines) {
+                if (item.getStaffLevelId() == null) continue;
+                com.accounting.firm.project.entity.ProjectBudget line = new com.accounting.firm.project.entity.ProjectBudget();
+                line.setProjectId(projectId);
+                line.setStaffLevelId(item.getStaffLevelId());
+                line.setHeadcount(item.getHeadcount() == null || item.getHeadcount() < 1 ? 1 : item.getHeadcount());
+                line.setHoursPerPerson(item.getHoursPerPerson() == null ? java.math.BigDecimal.ZERO : item.getHoursPerPerson());
+                projectBudgetMapper.insert(line);
+                total = total.add(java.math.BigDecimal.valueOf(line.getHeadcount()).multiply(line.getHoursPerPerson()));
+            }
+        }
+        project.setBudgetHours(total);
+        updateById(project);
+        return total;
     }
 }

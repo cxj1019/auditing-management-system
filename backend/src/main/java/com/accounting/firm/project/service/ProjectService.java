@@ -31,6 +31,12 @@ public interface ProjectService extends IService<Project> {
     /** 编辑项目基本信息（编号与状态不可修改；归档项目不可编辑） */
     void updateProject(ProjectRequest request);
 
+    /** 项目预算明细（级别×人数×每人工时） */
+    List<java.util.Map<String, Object>> getBudget(Long projectId);
+
+    /** 保存预算明细并汇总总预算到项目，返回总预算 */
+    java.math.BigDecimal saveBudget(Long projectId, List<com.accounting.firm.project.dto.ProjectBudgetItem> lines);
+
     /** 删除项目（仅进行中且无关联合同） */
     void deleteProject(Long id);
 

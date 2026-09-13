@@ -61,3 +61,15 @@ export function addProjectMember(projectId: number, memberName: string, memberRo
 export function removeProjectMember(projectId: number, memberId: number): Promise<void> {
   return request.delete(`/projects/${projectId}/members/${memberId}`)
 }
+
+// ---------- 项目预算（级别×人数×每人工时） ----------
+
+export interface ProjectBudgetLine { id?: number; staffLevelId: number | null; levelName?: string; headcount: number; hoursPerPerson: number; totalHours?: number }
+
+export function getProjectBudget(id: number): Promise<ProjectBudgetLine[]> {
+  return request.get(`/projects/${id}/budget`)
+}
+
+export function saveProjectBudget(id: number, lines: { staffLevelId: number | null; headcount: number; hoursPerPerson: number }[]): Promise<number> {
+  return request.put(`/projects/${id}/budget`, lines)
+}
