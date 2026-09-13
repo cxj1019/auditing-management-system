@@ -337,14 +337,6 @@ onMounted(() => {
             <el-table-column prop="projectName" label="项目名称" min-width="170" show-overflow-tooltip />
             <el-table-column label="合同总额（元）" min-width="120" align="right">
               <template #default="{ row }">{{ money(row.contractAmount) }}</template>
-      </el-table-column>
-    </el-table>
-    <template #footer>
-      <el-button @click="ratesVisible = false">取消</el-button>
-      <el-button type="primary" :loading="ratesSaving" @click="handleSaveRates">保存</el-button>
-    </template>
-  </el-dialog>
-</template>
             </el-table-column>
             <el-table-column label="收入（不含税）" min-width="120" align="right">
               <template #default="{ row }">{{ money(row.totalCollected) }}</template>
