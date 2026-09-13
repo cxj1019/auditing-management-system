@@ -79,11 +79,6 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
 
     /** 按项目汇总工时自动人工成本（推算工时 × 单价）：优先个人单价，否则按员工级别标准单价 */
     private Map<Long, BigDecimal> autoLaborByProject(Integer year) {
-        Map<Long, com.accounting.firm.cost.entity.LaborRate> rateByUser = laborRateMapper.selectList(null)
-                .stream().collect(java.util.stream.Collectors.toMap(
-                        com.accounting.firm.cost.entity.LaborRate::getUserId,
-                        r -> r,
-                        (a, b) -> a));
         // 级别标准单价
         Map<Long, BigDecimal> levelRate = staffLevelMapper.selectList(null).stream()
                 .collect(java.util.stream.Collectors.toMap(
@@ -92,9 +87,7 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
                         (a, b) -> a));
         Map<Long, BigDecimal> userRate = new java.util.LinkedHashMap<>();
         for (com.accounting.firm.system.entity.SysUser u : sysUserMapper.selectList(null)) {
-            BigDecimal r = rateByUser.containsKey(u.getId())
-                    ? rateByUser.get(u.getId()).getHourlyRate()
-                    : levelRate.getOrDefault(u.getStaffLevelId(), BigDecimal.ZERO);
+            BigDecimal r = levelRate.getOrDefault(u.getStaffLevelId(), BigDecimal.ZERO);
             userRate.put(u.getId(), r == null ? BigDecimal.ZERO : r);
         }
         if (userRate.isEmpty()) {
@@ -150,11 +143,6 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
                         .orderByAsc(com.accounting.firm.system.entity.StaffLevel::getSort));
         Map<Long, com.accounting.firm.system.entity.StaffLevel> levelById = levels.stream()
                 .collect(java.util.stream.Collectors.toMap(com.accounting.firm.system.entity.StaffLevel::getId, l -> l));
-        Map<Long, com.accounting.firm.cost.entity.LaborRate> personalById = laborRateMapper.selectList(null).stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        com.accounting.firm.cost.entity.LaborRate::getUserId,
-                        r -> r,
-                        (a, b) -> a));
         List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
         for (com.accounting.firm.system.entity.SysUser u : sysUserMapper.selectList(null)) {
             String name = u.getNickname() != null && !u.getNickname().isEmpty() ? u.getNickname() : u.getUsername();
@@ -164,21 +152,16 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
             row.put("staffLevelId", u.getStaffLevelId());
             row.put("levelName", u.getStaffLevelId() != null && levelById.containsKey(u.getStaffLevelId())
                     ? levelById.get(u.getStaffLevelId()).getName() : null);
-            row.put("effectiveRate", effectiveRateOf(u, personalById, levelById));
+            row.put("effectiveRate", effectiveRateOf(u, levelById));
             result.add(row);
         }
         result.sort((a, b) -> String.valueOf(a.get("userName")).compareTo(String.valueOf(b.get("userName"))));
         return result;
     }
 
-    /** 生效单价：个人单价 > 级别标准单价 > 0 */
+    /** 生效单价：成员级别标准单价（未定级为 0，不计人工成本） */
     private BigDecimal effectiveRateOf(com.accounting.firm.system.entity.SysUser u,
-                                       Map<Long, com.accounting.firm.cost.entity.LaborRate> personalById,
                                        Map<Long, com.accounting.firm.system.entity.StaffLevel> levelById) {
-        com.accounting.firm.cost.entity.LaborRate personal = personalById.get(u.getId());
-        if (personal != null && personal.getHourlyRate() != null && personal.getHourlyRate().signum() > 0) {
-            return personal.getHourlyRate();
-        }
         if (u.getStaffLevelId() != null && levelById.containsKey(u.getStaffLevelId())) {
             BigDecimal r = levelById.get(u.getStaffLevelId()).getHourlyRate();
             return r == null ? BigDecimal.ZERO : r;
@@ -188,7 +171,7 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
 
     @Override
     public void saveLaborRates(List<com.accounting.firm.cost.dto.LaborRateItem> rates, String operator) {
-        // 个人单价（个别调整用）：可覆盖级别标准单价
+        // 已改为级别制：个人单价不再参与计算；该方法保留兼容旧调用，仅清空传入即可
         for (var item : rates) {
             if (item.getUserId() == null || item.getHourlyRate() == null) continue;
             com.accounting.firm.cost.entity.LaborRate existing = laborRateMapper.selectOne(
