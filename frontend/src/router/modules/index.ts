@@ -64,6 +64,12 @@ const moduleRoutes: RouteRecordRaw[] = [
         meta: { title: '函证管理', perm: 'business:confirmation:list' },
       },
       {
+        path: 'vendor',
+        name: 'BusinessVendor',
+        component: () => import('@/views/business/vendor/index.vue'),
+        meta: { title: '对公付款', perm: 'business:vendor:list' },
+      },
+      {
         path: 'cost',
         name: 'BusinessCost',
         component: () => import('@/views/business/cost/index.vue'),

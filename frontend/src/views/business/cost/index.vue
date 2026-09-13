@@ -11,70 +11,12 @@ import {
   updateLaborCost,
   deleteLaborCost,
 } from '@/api/cost'
-import { getProjectHourDetails, getExpenseStats, getLaborRates, saveUserLevels, getStaffLevels, saveStaffLevels } from '@/api/cost'
+import { getProjectHourDetails, getLaborRates, saveUserLevels, getStaffLevels, saveStaffLevels } from '@/api/cost'
 import { useUserStore } from '@/stores/user'
 import { pageProjects } from '@/api/project'
-import type { ExpenseStatItem, CostOverview, LaborCostItem, LaborCostRequest, ProjectHoursItem, ProjectItem, ProjectProfitItem } from '@/types'
+import type { CostOverview, ProjectHoursItem, ProjectItem, ProjectProfitItem } from '@/types'
 
 const activeTab = ref('profit')
-
-// ---------- 员工费用统计 ----------
-const statYear = ref<number | undefined>(undefined)
-const statLoading = ref(false)
-const statRows = ref<ExpenseStatItem[]>([])
-
-async function fetchExpenseStats(): Promise<void> {
-  statLoading.value = true
-  try {
-    statRows.value = await getExpenseStats(statYear.value)
-  } finally { statLoading.value = false }
-}
-
-/** 类别列（数据动态聚合） */
-const statCategories = computed(() => {
-  const set: string[] = []
-  statRows.value.forEach((r) => { if (!set.includes(r.category)) set.push(r.category) })
-  return set
-})
-
-interface StatRow { applicantName: string; cells: Record<string, number>; total: number }
-const statMatrix = computed<StatRow[]>(() => {
-  const map = new Map<string, StatRow>()
-  statRows.value.forEach((r) => {
-    let row = map.get(r.applicantName)
-    if (!row) {
-      row = { applicantName: r.applicantName, cells: {}, total: 0 }
-      map.set(r.applicantName, row)
-    }
-    row.cells[r.category] = (row.cells[r.category] || 0) + Number(r.total || 0)
-    row.total += Number(r.total || 0)
-  })
-  return [...map.values()].sort((a, b) => b.total - a.total)
-})
-
-const statCategoryTotals = computed(() => {
-  const totals: Record<string, number> = {}
-  statRows.value.forEach((r) => {
-    totals[r.category] = (totals[r.category] || 0) + Number(r.total || 0)
-  })
-  return totals
-})
-
-function exportExpenseStats(): void {
-  const header = ['申请人', ...statCategories.value, '合计（元）']
-  const rows = statMatrix.value.map((r) => [
-    r.applicantName,
-    ...statCategories.value.map((c) => Number((r.cells[c] || 0).toFixed(2))),
-    Number(r.total.toFixed(2)),
-  ])
-  const totalRow = ['合计', ...statCategories.value.map((c) => Number((statCategoryTotals.value[c] || 0).toFixed(2))),
-    Number(statMatrix.value.reduce((sum, r) => sum + r.total, 0).toFixed(2))]
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows, totalRow])
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, '费用统计')
-  XLSX.writeFile(wb, `员工费用统计_${new Date().toISOString().slice(0, 10)}.xlsx`)
-  ElMessage.success('已导出')
-}
 
 // ---------- 项目年份筛选 ----------
 const currentYear = new Date().getFullYear()
@@ -205,101 +147,10 @@ function marginColor(percent: number): string {
 
 // ---------- 人工成本 ----------
 const laborLoading = ref(false)
-const laborRows = ref<LaborCostItem[]>([])
-const laborTotal = ref(0)
-const laborQuery = reactive({ current: 1, size: 10 })
-
-async function fetchLabor(): Promise<void> {
-  laborLoading.value = true
-  try {
-    const data = await pageLaborCosts(laborQuery)
-    laborRows.value = data.records
-    laborTotal.value = data.total
-  } finally {
-    laborLoading.value = false
-  }
-}
-
-const laborDialogVisible = ref(false)
-const saving = ref(false)
-const isEdit = ref(false)
-const editingId = ref<number | null>(null)
-const form = reactive<LaborCostRequest>({
-  projectId: 0,
-  personName: '',
-  costMonth: '',
-  amount: 0,
-  remark: '',
-})
-const projectOptions = ref<ProjectItem[]>([])
-
-async function loadProjectOptions(): Promise<void> {
-  const data = await pageProjects({ current: 1, size: 200 })
-  projectOptions.value = data.records
-}
-
-function openCreate(): void {
-  isEdit.value = false
-  editingId.value = null
-  Object.assign(form, { projectId: undefined, personName: '', costMonth: '', amount: 0, remark: '' })
-  loadProjectOptions()
-  laborDialogVisible.value = true
-}
-
-function openEdit(row: LaborCostItem): void {
-  isEdit.value = true
-  editingId.value = row.id
-  Object.assign(form, {
-    projectId: row.projectId,
-    personName: row.personName,
-    costMonth: row.costMonth,
-    amount: row.amount,
-    remark: row.remark,
-  })
-  laborDialogVisible.value = true
-}
-
-/** 编辑时合同不可更换 */
-async function handleSave(): Promise<void> {
-  saving.value = true
-  try {
-    if (isEdit.value && editingId.value) {
-      await updateLaborCost(editingId.value, form)
-      ElMessage.success('修改成功')
-    } else {
-      await addLaborCost(form)
-      ElMessage.success('登记成功')
-    }
-    laborDialogVisible.value = false
-    fetchLabor()
-    fetchProfit()
-    fetchOverview()
-  } finally {
-    saving.value = false
-  }
-}
-
-async function handleDelete(row: LaborCostItem): Promise<void> {
-  try {
-    await ElMessageBox.confirm(`确定删除「${row.personName} ${row.costMonth}」的人工成本吗？`, '删除确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-    await deleteLaborCost(row.id)
-    ElMessage.success('删除成功')
-    fetchLabor()
-    fetchProfit()
-    fetchOverview()
-  } catch {
-    // 用户取消
-  }
-}
 
 onMounted(() => {
   fetchOverview()
   fetchProfit()
-  fetchLabor()
 })
 </script>
 
@@ -375,93 +226,11 @@ onMounted(() => {
         </el-tab-pane>
 
         <!-- 页签二：人工成本 -->
-        <el-tab-pane label="费用统计" name="expense" lazy>
-          <div class="table-toolbar">
-            <div class="toolbar-filters">
-              <el-select v-model="statYear" placeholder="费用年份" clearable style="width: 130px" @change="fetchExpenseStats">
-                <el-option v-for="y in [2026, 2025, 2024, 2023]" :key="y" :label="y + ' 年'" :value="y" />
-              </el-select>
-            </div>
-            <el-button @click="exportExpenseStats" :disabled="!statRows.length">导出 Excel</el-button>
-          </div>
-          <el-table v-loading="statLoading" :data="statMatrix" border size="small" show-summary>
-            <el-table-column prop="applicantName" label="申请人" min-width="110" />
-            <el-table-column v-for="c in statCategories" :key="c" :label="c" min-width="110" align="right">
-              <template #default="{ row }">{{ (row.cells[c] || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</template>
-            </el-table-column>
-            <el-table-column label="合计（元）" min-width="120" align="right">
-              <template #default="{ row }">
-                <b>{{ row.total.toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}</b>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div style="margin-top: 8px; color: #9ca3af; font-size: 13px">统计口径：已批准的报销单，按费用发生日期所属年份筛选。</div>
-        </el-tab-pane>
-        <el-tab-pane label="人工成本" name="labor">
-          <div class="table-toolbar">
-            <span class="section-title">项目人工投入登记</span>
-            <el-button v-permission="'business:cost:labor-add'" type="primary" @click="openCreate">登记人工成本</el-button>
-          </div>
-
-          <el-table v-loading="laborLoading" :data="laborRows" border stripe>
-            <el-table-column prop="projectId" label="项目 ID" width="90" />
-            <el-table-column prop="personName" label="人员" min-width="110" />
-            <el-table-column prop="costMonth" label="成本月份" width="110" />
-            <el-table-column label="金额（元）" min-width="120" align="right">
-              <template #default="{ row }">{{ money(row.amount) }}</template>
-            </el-table-column>
-            <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
-            <el-table-column label="操作" width="130" fixed="right">
-              <template #default="{ row }">
-                <el-button v-permission="'business:cost:labor-edit'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button v-permission="'business:cost:labor-delete'" link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <div class="pagination-wrapper">
-            <el-pagination
-              v-model:current-page="laborQuery.current"
-              v-model:page-size="laborQuery.size"
-              :total="laborTotal"
-              :page-sizes="[10, 20, 50]"
-              layout="total, sizes, prev, pager, next, jumper"
-              @current-change="fetchLabor"
-              @size-change="fetchLabor"
-            />
-          </div>
-        </el-tab-pane>
       </el-tabs>
     </el-card>
 
     <!-- 人工成本弹窗 -->
-    <el-dialog v-model="laborDialogVisible" :title="isEdit ? '编辑人工成本' : '登记人工成本'" width="520px">
-      <el-form :model="form" label-width="100px">
-        <el-form-item label="所属项目" required>
-          <el-select v-model="form.projectId" :disabled="isEdit" placeholder="选择项目" filterable style="width: 100%">
-            <el-option v-for="p in projectOptions" :key="p.id" :label="`${p.projectNo} | ${p.name}`" :value="p.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="人员姓名" required>
-          <el-input v-model="form.personName" placeholder="人员姓名" maxlength="50" />
-        </el-form-item>
-        <el-form-item label="成本月份" required>
-          <el-date-picker v-model="form.costMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="金额（元）" required>
-          <el-input-number v-model="form.amount" :min="0.01" :precision="2" :step="1000" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="2" maxlength="500" placeholder="备注（可选）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="laborDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">确定</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 工时单价：级别标准 + 成员定级 -->
+        <!-- 工时单价：级别标准 + 成员定级 -->
     <el-dialog v-model="ratesVisible" title="工时单价（按级别）" width="640px">
       <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px">
         项目人工成本 = 推算工时 × 成员级别标准单价（个人单价可作个别调整）。级别名称与单价由管理员在此维护。

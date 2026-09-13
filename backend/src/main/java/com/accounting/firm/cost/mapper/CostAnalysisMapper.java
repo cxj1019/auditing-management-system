@@ -18,7 +18,7 @@ public interface CostAnalysisMapper {
                    p.budget_hours AS budget_hours,
                    COALESCE(amt.contract_amount, 0) AS contract_amount,
                    COALESCE(rev.income, 0) AS total_collected,
-                   COALESCE(exp.expense, 0) AS expense_cost,
+                   COALESCE(exp.expense, 0) + COALESCE(vp.expense, 0) AS expense_cost,
                    COALESCE(l.labor, 0) AS labor_cost
             FROM project p
             LEFT JOIN client cl ON cl.id = p.client_id
@@ -33,6 +33,10 @@ public interface CostAnalysisMapper {
                        LEFT JOIN invoice inv ON inv.id = cp.invoice_id
                        WHERE c.project_id IS NOT NULL
                        GROUP BY c.project_id) rev ON rev.project_id = p.id
+            LEFT JOIN (SELECT project_id, SUM(COALESCE(amount_ex_tax, amount)) AS expense
+                       FROM vendor_payment
+                       WHERE status IN (2, 4) AND project_id IS NOT NULL
+                       GROUP BY project_id) vp ON vp.project_id = p.id
             LEFT JOIN (SELECT COALESCE(i.project_id, r.project_id) AS project_id,
                               SUM(CASE WHEN i.invoice_type = 'vat_special' AND i.tax_rate IS NOT NULL
                                        THEN i.amount - COALESCE(i.tax_amount, i.amount * i.tax_rate / (100 + i.tax_rate))
@@ -95,7 +99,7 @@ public interface CostAnalysisMapper {
             )
             SELECT m.ym,
                    COALESCE(inc.amount, 0)  AS income,
-                   COALESCE(exp.amount, 0)  AS expense,
+                   COALESCE(exp.amount, 0) + COALESCE(vpay.amount, 0)  AS expense,
                    COALESCE(lab.amount, 0)  AS labor
             FROM months m
             LEFT JOIN (SELECT to_char(cp.payment_date, 'YYYY-MM') AS ym,
@@ -112,6 +116,11 @@ public interface CostAnalysisMapper {
                        JOIN reimbursement r ON r.id = i.reimbursement_id
                        WHERE r.status IN (2, 4)
                        GROUP BY 1) exp ON exp.ym = m.ym
+            LEFT JOIN (SELECT to_char(payment_date, 'YYYY-MM') AS ym,
+                              SUM(COALESCE(amount_ex_tax, amount)) AS amount
+                       FROM vendor_payment
+                       WHERE status IN (2, 4) AND payment_date IS NOT NULL
+                       GROUP BY 1) vpay ON vpay.ym = m.ym
             LEFT JOIN (SELECT cost_month AS ym, SUM(amount) AS amount
                        FROM labor_cost GROUP BY 1) lab ON lab.ym = m.ym
             ORDER BY m.ym
