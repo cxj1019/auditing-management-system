@@ -576,6 +576,53 @@ onMounted(async () => {
       </template>
     </el-drawer>
 
+    <!-- 登记/编辑进项发票 -->
+    <el-dialog v-model="invoiceDialogVisible" :title="editingInvoiceId ? '编辑进项发票' : '登记进项发票'" width="560px">
+      <el-form label-width="110px">
+        <el-form-item label="供应商" required>
+          <el-input v-model="invoiceForm.vendorName" maxlength="200" placeholder="开票方名称" />
+        </el-form-item>
+        <el-form-item label="发票号">
+          <el-input v-model="invoiceForm.invoiceNo" maxlength="50" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="invoiceForm.type" style="width: 220px">
+            <el-option label="增值税专用发票" value="增值税专用发票" />
+            <el-option label="增值税普通发票" value="增值税普通发票" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="价税合计" required>
+          <el-input-number v-model="invoiceForm.amount" :min="0" :precision="2" :controls="false" style="width: 220px" @change="onInvoiceAmountChange" />
+        </el-form-item>
+        <el-form-item label="税率（%）">
+          <el-select v-model="invoiceForm.taxRate" clearable filterable allow-create placeholder="可选" style="width: 220px" @change="onInvoiceAmountChange">
+            <el-option v-for="r in [13, 9, 6, 3, 1.5, 0]" :key="r" :label="r + '%'" :value="r" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="不含税 / 税额">
+          <div style="display: flex; gap: 8px">
+            <el-input-number v-model="invoiceForm.amountExTax" :min="0" :precision="2" :controls="false" style="width: 140px" />
+            <el-input-number v-model="invoiceForm.taxAmount" :min="0" :precision="2" :controls="false" style="width: 140px" />
+          </div>
+        </el-form-item>
+        <el-form-item label="开票日期">
+          <el-date-picker v-model="invoiceForm.invoiceDate" type="date" value-format="YYYY-MM-DD" style="width: 220px" />
+        </el-form-item>
+        <el-form-item label="归集项目">
+          <el-select v-model="invoiceForm.projectId" clearable filterable placeholder="可选" style="width: 100%">
+            <el-option v-for="p in projectOptions" :key="p.id" :label="`${p.projectNo} | ${p.name}`" :value="p.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="invoiceForm.remark" type="textarea" :rows="2" maxlength="500" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="invoiceDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="invoiceSaving" @click="handleInvoiceSave">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 预付核销 -->
     <el-dialog v-model="writeOffVisible" title="核销到进项发票" width="480px">
       <p v-if="writeOffRow" style="margin: 0 0 8px; color: #6b7280; font-size: 13px">
