@@ -40,6 +40,9 @@ public class SysUser implements Serializable {
     /** 部门 ID */
     private Long deptId;
 
+    /** 员工级别（staff_level.id），用于工时单价 */
+    private Long staffLevelId;
+
     /** 状态：1-启用 0-禁用 */
     private Integer status;
 

@@ -80,6 +80,29 @@ public class CostAnalysisController {
     }
 
     /** 分页查询人工成本 */
+    /** 级别清单（名称+标准单价） */
+    @PreAuthorize("hasAuthority('business:cost:list')")
+    @GetMapping("/staff-levels")
+    public ApiResult<List<com.accounting.firm.system.entity.StaffLevel>> staffLevels() {
+        return ApiResult.success(costAnalysisService.staffLevels());
+    }
+
+    /** 保存级别（名称/标准单价，仅管理员） */
+    @PreAuthorize("hasAuthority('business:cost:labor-edit')")
+    @PutMapping("/staff-levels")
+    public ApiResult<Void> saveStaffLevels(@RequestBody List<com.accounting.firm.system.entity.StaffLevel> levels) {
+        costAnalysisService.saveStaffLevels(levels);
+        return ApiResult.success();
+    }
+
+    /** 保存成员定级（仅管理员） */
+    @PreAuthorize("hasAuthority('business:cost:labor-edit')")
+    @PutMapping("/user-levels")
+    public ApiResult<Void> saveUserLevels(@RequestBody List<com.accounting.firm.cost.dto.LaborRateItem> assignments) {
+        costAnalysisService.saveUserLevels(assignments);
+        return ApiResult.success();
+    }
+
     /** 工时单价清单（成本分析可见者可查） */
     @PreAuthorize("hasAuthority('business:cost:list')")
     @GetMapping("/labor-rates")

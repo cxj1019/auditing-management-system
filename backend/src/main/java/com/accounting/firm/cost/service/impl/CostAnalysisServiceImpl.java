@@ -42,6 +42,7 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
     private final ProjectMapper projectMapper;
     private final ScheduleMapper scheduleMapper;
     private final com.accounting.firm.cost.mapper.LaborRateMapper laborRateMapper;
+    private final com.accounting.firm.system.mapper.StaffLevelMapper staffLevelMapper;
     private final com.accounting.firm.system.mapper.SysUserMapper sysUserMapper;
 
     @Override
@@ -76,14 +77,27 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
         return result;
     }
 
-    /** 按项目汇总工时自动人工成本（推算工时 × 人员单价） */
+    /** 按项目汇总工时自动人工成本（推算工时 × 单价）：优先个人单价，否则按员工级别标准单价 */
     private Map<Long, BigDecimal> autoLaborByProject(Integer year) {
         Map<Long, com.accounting.firm.cost.entity.LaborRate> rateByUser = laborRateMapper.selectList(null)
                 .stream().collect(java.util.stream.Collectors.toMap(
                         com.accounting.firm.cost.entity.LaborRate::getUserId,
                         r -> r,
                         (a, b) -> a));
-        if (rateByUser.isEmpty()) {
+        // 级别标准单价
+        Map<Long, BigDecimal> levelRate = staffLevelMapper.selectList(null).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.accounting.firm.system.entity.StaffLevel::getId,
+                        l -> l.getHourlyRate() == null ? BigDecimal.ZERO : l.getHourlyRate(),
+                        (a, b) -> a));
+        Map<Long, BigDecimal> userRate = new java.util.LinkedHashMap<>();
+        for (com.accounting.firm.system.entity.SysUser u : sysUserMapper.selectList(null)) {
+            BigDecimal r = rateByUser.containsKey(u.getId())
+                    ? rateByUser.get(u.getId()).getHourlyRate()
+                    : levelRate.getOrDefault(u.getStaffLevelId(), BigDecimal.ZERO);
+            userRate.put(u.getId(), r == null ? BigDecimal.ZERO : r);
+        }
+        if (userRate.isEmpty()) {
             return Map.of();
         }
         LambdaQueryWrapper<Schedule> wrapper = new LambdaQueryWrapper<Schedule>()
@@ -95,10 +109,9 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
         List<Schedule> schedules = scheduleMapper.selectList(wrapper);
         Map<Long, BigDecimal> result = new java.util.LinkedHashMap<>();
         for (Schedule s : schedules) {
-            com.accounting.firm.cost.entity.LaborRate rate = rateByUser.get(s.getUserId());
-            if (rate == null || rate.getHourlyRate() == null) continue;
-            BigDecimal cost = ScheduleHoursCalculator.effectiveHours(s).multiply(rate.getHourlyRate());
-            result.merge(s.getProjectId(), cost, BigDecimal::add);
+            BigDecimal rate = userRate.get(s.getUserId());
+            if (rate == null || rate.signum() <= 0) continue;
+            result.merge(s.getProjectId(), ScheduleHoursCalculator.effectiveHours(s).multiply(rate), BigDecimal::add);
         }
         return result;
     }
@@ -132,30 +145,50 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
 
     @Override
     public List<java.util.Map<String, Object>> laborRates() {
-        Map<Long, String> names = sysUserMapper.selectList(null).stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        com.accounting.firm.system.entity.SysUser::getId,
-                        u -> u.getNickname() != null && !u.getNickname().isEmpty() ? u.getNickname() : u.getUsername(),
-                        (a, b) -> a));
-        Map<Long, BigDecimal> rateById = laborRateMapper.selectList(null).stream()
+        List<com.accounting.firm.system.entity.StaffLevel> levels = staffLevelMapper.selectList(
+                new LambdaQueryWrapper<com.accounting.firm.system.entity.StaffLevel>()
+                        .orderByAsc(com.accounting.firm.system.entity.StaffLevel::getSort));
+        Map<Long, com.accounting.firm.system.entity.StaffLevel> levelById = levels.stream()
+                .collect(java.util.stream.Collectors.toMap(com.accounting.firm.system.entity.StaffLevel::getId, l -> l));
+        Map<Long, com.accounting.firm.cost.entity.LaborRate> personalById = laborRateMapper.selectList(null).stream()
                 .collect(java.util.stream.Collectors.toMap(
                         com.accounting.firm.cost.entity.LaborRate::getUserId,
-                        com.accounting.firm.cost.entity.LaborRate::getHourlyRate,
+                        r -> r,
                         (a, b) -> a));
         List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
-        for (var entry : names.entrySet()) {
+        for (com.accounting.firm.system.entity.SysUser u : sysUserMapper.selectList(null)) {
+            String name = u.getNickname() != null && !u.getNickname().isEmpty() ? u.getNickname() : u.getUsername();
             java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
-            row.put("userId", entry.getKey());
-            row.put("userName", entry.getValue());
-            row.put("hourlyRate", rateById.getOrDefault(entry.getKey(), BigDecimal.ZERO));
+            row.put("userId", u.getId());
+            row.put("userName", name);
+            row.put("staffLevelId", u.getStaffLevelId());
+            row.put("levelName", u.getStaffLevelId() != null && levelById.containsKey(u.getStaffLevelId())
+                    ? levelById.get(u.getStaffLevelId()).getName() : null);
+            row.put("effectiveRate", effectiveRateOf(u, personalById, levelById));
             result.add(row);
         }
         result.sort((a, b) -> String.valueOf(a.get("userName")).compareTo(String.valueOf(b.get("userName"))));
         return result;
     }
 
+    /** 生效单价：个人单价 > 级别标准单价 > 0 */
+    private BigDecimal effectiveRateOf(com.accounting.firm.system.entity.SysUser u,
+                                       Map<Long, com.accounting.firm.cost.entity.LaborRate> personalById,
+                                       Map<Long, com.accounting.firm.system.entity.StaffLevel> levelById) {
+        com.accounting.firm.cost.entity.LaborRate personal = personalById.get(u.getId());
+        if (personal != null && personal.getHourlyRate() != null && personal.getHourlyRate().signum() > 0) {
+            return personal.getHourlyRate();
+        }
+        if (u.getStaffLevelId() != null && levelById.containsKey(u.getStaffLevelId())) {
+            BigDecimal r = levelById.get(u.getStaffLevelId()).getHourlyRate();
+            return r == null ? BigDecimal.ZERO : r;
+        }
+        return BigDecimal.ZERO;
+    }
+
     @Override
     public void saveLaborRates(List<com.accounting.firm.cost.dto.LaborRateItem> rates, String operator) {
+        // 个人单价（个别调整用）：可覆盖级别标准单价
         for (var item : rates) {
             if (item.getUserId() == null || item.getHourlyRate() == null) continue;
             com.accounting.firm.cost.entity.LaborRate existing = laborRateMapper.selectOne(
@@ -174,6 +207,44 @@ public class CostAnalysisServiceImpl extends ServiceImpl<LaborCostMapper, LaborC
                 existing.setUpdateTime(java.time.LocalDateTime.now());
                 laborRateMapper.updateById(existing);
             }
+        }
+    }
+
+    @Override
+    public List<com.accounting.firm.system.entity.StaffLevel> staffLevels() {
+        return staffLevelMapper.selectList(new LambdaQueryWrapper<com.accounting.firm.system.entity.StaffLevel>()
+                .orderByAsc(com.accounting.firm.system.entity.StaffLevel::getSort));
+    }
+
+    @Override
+    public void saveStaffLevels(List<com.accounting.firm.system.entity.StaffLevel> levels) {
+        for (com.accounting.firm.system.entity.StaffLevel level : levels) {
+            if (level.getName() == null || level.getName().isBlank()) continue;
+            if (level.getId() == null) {
+                com.accounting.firm.system.entity.StaffLevel fresh = new com.accounting.firm.system.entity.StaffLevel();
+                fresh.setName(level.getName().trim());
+                fresh.setHourlyRate(level.getHourlyRate() == null ? BigDecimal.ZERO : level.getHourlyRate());
+                fresh.setSort(level.getSort() == null ? 999 : level.getSort());
+                staffLevelMapper.insert(fresh);
+            } else {
+                com.accounting.firm.system.entity.StaffLevel existing = staffLevelMapper.selectById(level.getId());
+                if (existing == null) continue;
+                existing.setName(level.getName().trim());
+                existing.setHourlyRate(level.getHourlyRate() == null ? BigDecimal.ZERO : level.getHourlyRate());
+                if (level.getSort() != null) existing.setSort(level.getSort());
+                staffLevelMapper.updateById(existing);
+            }
+        }
+    }
+
+    @Override
+    public void saveUserLevels(List<com.accounting.firm.cost.dto.LaborRateItem> assignments) {
+        for (var item : assignments) {
+            if (item.getUserId() == null) continue;
+            com.accounting.firm.system.entity.SysUser user = sysUserMapper.selectById(item.getUserId());
+            if (user == null) continue;
+            user.setStaffLevelId(item.getStaffLevelId());
+            sysUserMapper.updateById(user);
         }
     }
 

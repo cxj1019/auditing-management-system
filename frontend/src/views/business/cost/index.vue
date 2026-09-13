@@ -11,7 +11,7 @@ import {
   updateLaborCost,
   deleteLaborCost,
 } from '@/api/cost'
-import { getProjectHourDetails, getExpenseStats, getLaborRates, saveLaborRates } from '@/api/cost'
+import { getProjectHourDetails, getExpenseStats, getLaborRates, saveUserLevels, getStaffLevels, saveStaffLevels } from '@/api/cost'
 import { useUserStore } from '@/stores/user'
 import { pageProjects } from '@/api/project'
 import type { ExpenseStatItem, CostOverview, LaborCostItem, LaborCostRequest, ProjectHoursItem, ProjectItem, ProjectProfitItem } from '@/types'
@@ -107,23 +107,32 @@ const canEditRates = computed(() => userStore.hasPermission('business:cost:labor
 const ratesVisible = ref(false)
 const ratesLoading = ref(false)
 const ratesSaving = ref(false)
-const ratesList = ref<{ userId: number; userName: string; hourlyRate: number }[]>([])
+const ratesList = ref<{ userId: number; userName: string; staffLevelId?: number | null; effectiveRate?: number }[]>([])
+const levelList = ref<{ id?: number; name: string; hourlyRate: number; sort?: number }[]>([])
 
 async function openRates(): Promise<void> {
   ratesVisible.value = true
   ratesLoading.value = true
   try {
-    ratesList.value = await getLaborRates()
+    const [rates, levels] = await Promise.all([getLaborRates(), getStaffLevels()])
+    ratesList.value = rates
+    levelList.value = levels
   } finally {
     ratesLoading.value = false
   }
 }
 
 async function handleSaveRates(): Promise<void> {
+  const named = levelList.value.filter((l) => l.name && l.name.trim())
+  if (!named.length) {
+    ElMessage.warning('至少保留一个有名称的级别')
+    return
+  }
   ratesSaving.value = true
   try {
-    await saveLaborRates(ratesList.value.map((r) => ({ userId: r.userId, hourlyRate: Number(r.hourlyRate) || 0 })))
-    ElMessage.success('工时单价已保存，项目人工成本已按新单价重算')
+    await saveStaffLevels(named)
+    await saveUserLevels(ratesList.value.map((r) => ({ userId: r.userId, staffLevelId: r.staffLevelId ?? null })))
+    ElMessage.success('级别单价与成员定级已保存，人工成本已按新单价重算')
     ratesVisible.value = false
     fetchProfit()
   } finally {
@@ -327,17 +336,7 @@ onMounted(() => {
             <el-table-column prop="projectNo" label="项目编号" min-width="150" />
             <el-table-column prop="projectName" label="项目名称" min-width="170" show-overflow-tooltip />
             <el-table-column label="合同总额（元）" min-width="120" align="right">
-              <template #default="{ row }">{{ money(row.contractAmount) }}  <!-- 工时单价设置 -->
-  <el-dialog v-model="ratesVisible" title="工时单价设置（元/小时）" width="520px">
-    <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px">
-      项目人工成本 = 推算工时 × 单价，自动并入成本分析的"人工合计"；人工成本登记可继续作为调整项。
-    </p>
-    <el-table v-loading="ratesLoading" :data="ratesList" border size="small" max-height="420">
-      <el-table-column prop="userName" label="成员" min-width="120" />
-      <el-table-column label="单价（元/小时）" width="200" align="right">
-        <template #default="{ row }">
-          <el-input-number v-model="row.hourlyRate" :min="0" :max="9999" :precision="2" :controls="false" style="width: 160px" />
-        </template>
+              <template #default="{ row }">{{ money(row.contractAmount) }}</template>
       </el-table-column>
     </el-table>
     <template #footer>
@@ -467,6 +466,53 @@ onMounted(() => {
       <template #footer>
         <el-button @click="laborDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="handleSave">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 工时单价：级别标准 + 成员定级 -->
+    <el-dialog v-model="ratesVisible" title="工时单价（按级别）" width="640px">
+      <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px">
+        项目人工成本 = 推算工时 × 成员级别标准单价（个人单价可作个别调整）。级别名称与单价由管理员在此维护。
+      </p>
+
+      <div class="section-title" style="margin-bottom: 6px">级别标准单价</div>
+      <el-table :data="levelList" border size="small" max-height="220">
+        <el-table-column label="级别名称" width="200">
+          <template #default="{ row }">
+            <el-input v-model="row.name" size="small" maxlength="20" placeholder="如 A1" />
+          </template>
+        </el-table-column>
+        <el-table-column label="标准单价（元/小时）" align="right">
+          <template #default="{ row }">
+            <el-input-number v-model="row.hourlyRate" size="small" :min="0" :max="9999" :precision="2" :controls="false" style="width: 140px" />
+          </template>
+        </el-table-column>
+        <el-table-column label="" width="70">
+          <template #default="{ $index }">
+            <el-button link type="danger" size="small" @click="levelList.splice($index, 1)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-button size="small" style="margin: 6px 0 14px" @click="levelList.push({ name: '', hourlyRate: 0, sort: (levelList.length + 1) * 10 })">＋ 新增级别</el-button>
+
+      <div class="section-title" style="margin-bottom: 6px">成员定级</div>
+      <el-table v-loading="ratesLoading" :data="ratesList" border size="small" max-height="260">
+        <el-table-column prop="userName" label="成员" min-width="110" />
+        <el-table-column label="级别" width="180">
+          <template #default="{ row }">
+            <el-select v-model="row.staffLevelId" size="small" clearable placeholder="未定级" style="width: 100%">
+              <el-option v-for="lv in levelList" :key="lv.id || lv.name" :label="lv.name" :value="lv.id" />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="生效单价（元/h）" align="right" width="140">
+          <template #default="{ row }">{{ Number(row.effectiveRate || 0).toFixed(2) }}</template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <el-button @click="ratesVisible = false">取消</el-button>
+        <el-button type="primary" :loading="ratesSaving" @click="handleSaveRates">保存</el-button>
       </template>
     </el-dialog>
   </div>

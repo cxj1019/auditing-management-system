@@ -60,3 +60,19 @@ export function getLaborRates(): Promise<{ userId: number; userName: string; hou
 export function saveLaborRates(rates: { userId: number; hourlyRate: number }[]): Promise<void> {
   return request.put('/cost/labor-rates', rates)
 }
+
+/** 员工级别清单（名称+标准单价） */
+export interface StaffLevelItem { id?: number; name: string; hourlyRate: number; sort?: number }
+
+export function getStaffLevels(): Promise<StaffLevelItem[]> {
+  return request.get('/cost/staff-levels')
+}
+
+export function saveStaffLevels(levels: StaffLevelItem[]): Promise<void> {
+  return request.put('/cost/staff-levels', levels)
+}
+
+/** 保存成员定级 */
+export function saveUserLevels(assignments: { userId: number; staffLevelId: number | null }[]): Promise<void> {
+  return request.put('/cost/user-levels', assignments)
+}

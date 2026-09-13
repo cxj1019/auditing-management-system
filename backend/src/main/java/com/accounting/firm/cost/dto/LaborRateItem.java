@@ -11,4 +11,7 @@ public class LaborRateItem {
     private Long userId;
 
     private BigDecimal hourlyRate;
+
+    /** 员工级别 ID（定级用） */
+    private Long staffLevelId;
 }

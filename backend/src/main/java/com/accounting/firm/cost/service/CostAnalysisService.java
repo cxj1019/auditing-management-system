@@ -26,6 +26,15 @@ public interface CostAnalysisService extends IService<LaborCost> {
     /** 保存工时单价（系统管理员） */
     void saveLaborRates(List<com.accounting.firm.cost.dto.LaborRateItem> rates, String operator);
 
+    /** 级别清单（名称+标准单价） */
+    List<com.accounting.firm.system.entity.StaffLevel> staffLevels();
+
+    /** 保存级别（名称/单价/排序，可新增） */
+    void saveStaffLevels(List<com.accounting.firm.system.entity.StaffLevel> levels);
+
+    /** 保存成员定级 */
+    void saveUserLevels(List<com.accounting.firm.cost.dto.LaborRateItem> assignments);
+
     /** 人员工时明细（项目 × 人员，含部门隔离），供导出 */
     List<java.util.Map<String, Object>> projectHourDetails(String keyword, Integer year);
 
