@@ -259,6 +259,10 @@ public class ContractServiceImpl extends ServiceImpl<ContractMapper, Contract> i
         if (contract == null) {
             throw new BusinessException("合同不存在");
         }
+        // 与前端规则一致：仅草稿合同可编辑
+        if (contract.getStatus() != null && contract.getStatus() != 0) {
+            throw new BusinessException("仅草稿状态的合同可编辑");
+        }
         validateDates(request);
         // 仅更新基本信息字段；编号、状态与所属项目不可通过编辑修改
         copyBasicFields(request, contract);
