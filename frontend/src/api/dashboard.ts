@@ -9,7 +9,7 @@ export function getDashboard(): Promise<DashboardSummary> {
 
 /** 近 12 个月经营趋势 */
 export function getMonthlyTrend(): Promise<MonthlyTrendItem[]> {
-  return request.get('/dashboard/monthly-trend')
+  return request.get('/cost/monthly-trend')
 }
 
 /** 数据体检 */
