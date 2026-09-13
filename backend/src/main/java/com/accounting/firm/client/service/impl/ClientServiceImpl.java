@@ -75,6 +75,16 @@ public class ClientServiceImpl extends ServiceImpl<ClientMapper, Client> impleme
         if (getById(id) == null) {
             throw new BusinessException("客户不存在");
         }
+        Long projects = projectMapper.selectCount(new LambdaQueryWrapper<com.accounting.firm.project.entity.Project>()
+                .eq(com.accounting.firm.project.entity.Project::getClientId, id));
+        if (projects != null && projects > 0) {
+            throw new BusinessException("该客户名下有 " + projects + " 个项目，不可删除");
+        }
+        Long contracts = contractMapper.selectCount(new LambdaQueryWrapper<com.accounting.firm.contract.entity.Contract>()
+                .eq(com.accounting.firm.contract.entity.Contract::getClientId, id));
+        if (contracts != null && contracts > 0) {
+            throw new BusinessException("该客户名下有 " + contracts + " 份合同，不可删除");
+        }
         removeById(id);
     }
 
