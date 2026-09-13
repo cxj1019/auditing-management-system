@@ -57,10 +57,23 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
                     .or().like(VendorPayment::getPaymentNo, keyword)
                     .or().like(VendorPayment::getInvoiceNo, keyword));
         }
-        // 员工仅看自己登记的；经理及以上看全量（对公付款属公司层面事务）
+        // 部门隔离：员工仅看自己登记的；经理/合伙人看本部门项目的付款 + 本部门人员登记的无项目付款 + 自己登记的；
+        // admin/财务看全量
         int level = dataScopeService.roleLevel(currentUser.getUserId());
         if (level <= 1) {
             wrapper.eq(VendorPayment::getCreateBy, currentUser.getUsername());
+        } else if (!currentUser.hasRole("admin") && !currentUser.hasRole("finance")) {
+            Long deptId = currentUser.getDeptId();
+            if (deptId != null) {
+                wrapper.and(w -> w
+                        .inSql(VendorPayment::getProjectId, "SELECT id FROM project WHERE dept_id = " + deptId)
+                        .or(w2 -> w2.isNull(VendorPayment::getProjectId)
+                                .inSql(VendorPayment::getCreateBy,
+                                        "SELECT username FROM sys_user WHERE dept_id = " + deptId))
+                        .or(w3 -> w3.eq(VendorPayment::getCreateBy, currentUser.getUsername())));
+            } else {
+                wrapper.eq(VendorPayment::getCreateBy, currentUser.getUsername());
+            }
         }
         wrapper.orderByDesc(VendorPayment::getCreateTime);
         Page<VendorPayment> page = page(new Page<>(current, size), wrapper);
