@@ -349,16 +349,17 @@ onMounted(fetchAll)
 .ms-week-bar { display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 10px; }
 .ms-week-bar .el-icon { font-size: 18px; color: #4b5563; cursor: pointer; padding: 6px; }
 .ms-week-label { font-size: 15px; font-weight: 600; cursor: pointer; }
-.ms-board { overflow-x: auto; background: #fff; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; -webkit-overflow-scrolling: touch; }
+.ms-board { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 210px); background: #fff; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; -webkit-overflow-scrolling: touch; }
 .ms-table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .ms-table th, .ms-table td { border-right: 1px solid #f0f1f3; border-bottom: 1px solid #f0f1f3; padding: 0; vertical-align: top; }
 .ms-member-col { position: sticky; left: 0; z-index: 2; background: #fafbfc; min-width: 96px; max-width: 96px; }
 .ms-day-col { min-width: 132px; }
-th.ms-day-col { padding: 6px 4px; text-align: center; background: #fafbfc; }
+th.ms-day-col { position: sticky; top: 0; z-index: 3; padding: 6px 4px; text-align: center; background: #fafbfc; box-shadow: inset 0 -1px 0 #e5e7eb; }
 .ms-day-md { font-size: 14px; font-weight: 600; color: #374151; }
 .ms-day-md.today { color: #2563eb; }
 .ms-day-week { font-size: 11px; color: #9ca3af; }
 th.ms-day-col.today { background: #eef4ff; }
+th.ms-member-col { z-index: 4; }
 td.ms-day-col { padding: 4px; min-height: 64px; height: 64px; }
 td.ms-member-col { padding: 10px 8px; }
 .ms-member { display: flex; align-items: center; gap: 8px; }

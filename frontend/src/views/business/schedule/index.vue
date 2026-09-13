@@ -802,14 +802,22 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 180px repeat(7, minmax(0, 1fr));
   border-right: 1px solid #e5e7eb;
+  /* 成员多时网格内部滚动，日期表头固定在顶部 */
+  max-height: calc(100vh - 300px);
+  min-height: 320px;
+  overflow-y: auto;
 }
 .grid-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   padding: 10px 8px;
   text-align: center;
   font-size: 13px;
   color: var(--el-text-color-regular);
   border-bottom: 1px solid var(--el-border-color-light);
   border-right: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
 }
 .grid-header.today { color: var(--el-color-primary); font-weight: 600; }
 .header-date { font-weight: 600; }
@@ -914,4 +922,7 @@ onMounted(() => {
 .member-item:hover { background: #f0f7ff; color: #409eff; }
 .member-empty { padding: 12px; text-align: center; color: #9ca3af; font-size: 13px; }
 .sticky-col { position: sticky; left: 0; z-index: 2; }
+/* 表头行的左上角单元格（部门筛选）需要同时固定顶部与左侧 */
+.grid-header.sticky-col { z-index: 6; }
+.grid-member.sticky-col { z-index: 3; }
 </style>
