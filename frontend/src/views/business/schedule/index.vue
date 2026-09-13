@@ -803,7 +803,7 @@ onMounted(() => {
   grid-template-columns: 180px repeat(7, minmax(0, 1fr));
   border-right: 1px solid #e5e7eb;
   /* 成员多时网格内部滚动，日期表头固定在顶部 */
-  max-height: calc(100vh - 300px);
+  max-height: calc(100vh - 200px);
   min-height: 320px;
   overflow-y: auto;
 }
