@@ -11,7 +11,8 @@ import {
   updateLaborCost,
   deleteLaborCost,
 } from '@/api/cost'
-import { getProjectHourDetails, getExpenseStats } from '@/api/cost'
+import { getProjectHourDetails, getExpenseStats, getLaborRates, saveLaborRates } from '@/api/cost'
+import { useUserStore } from '@/stores/user'
 import { pageProjects } from '@/api/project'
 import type { ExpenseStatItem, CostOverview, LaborCostItem, LaborCostRequest, ProjectHoursItem, ProjectItem, ProjectProfitItem } from '@/types'
 
@@ -101,6 +102,34 @@ const overviewCards = computed(() => [
 
 // ---------- 项目利润表 ----------
 const profitLoading = ref(false)
+const userStore = useUserStore()
+const canEditRates = computed(() => userStore.hasPermission('business:cost:labor-edit'))
+const ratesVisible = ref(false)
+const ratesLoading = ref(false)
+const ratesSaving = ref(false)
+const ratesList = ref<{ userId: number; userName: string; hourlyRate: number }[]>([])
+
+async function openRates(): Promise<void> {
+  ratesVisible.value = true
+  ratesLoading.value = true
+  try {
+    ratesList.value = await getLaborRates()
+  } finally {
+    ratesLoading.value = false
+  }
+}
+
+async function handleSaveRates(): Promise<void> {
+  ratesSaving.value = true
+  try {
+    await saveLaborRates(ratesList.value.map((r) => ({ userId: r.userId, hourlyRate: Number(r.hourlyRate) || 0 })))
+    ElMessage.success('工时单价已保存，项目人工成本已按新单价重算')
+    ratesVisible.value = false
+    fetchProfit()
+  } finally {
+    ratesSaving.value = false
+  }
+}
 const profitRows = ref<ProjectProfitItem[]>([])
 const profitKeyword = ref('')
 
@@ -122,15 +151,16 @@ async function handleExportHours(): Promise<void> {
     }
     const wb = XLSX.utils.book_new()
 
-    const profitHeader = ['项目编号', '项目名称', '客户', '合同金额（元）', '收入（不含税）', '直接成本（不含税）', '人工成本（元）', '毛利（元）', '毛利率（%）']
+    const profitHeader = ['项目编号', '项目名称', '客户', '合同金额（元）', '收入（不含税）', '直接成本（不含税）', '工时人工-自动（元）', '人工合计（元）', '实际工时（h）', '预算工时（h）', '毛利（元）', '毛利率（%）']
     const profitData = profits.map((r) => [
       r.projectNo, r.projectName, r.clientName || '',
       Number(r.contractAmount || 0), Number(r.totalCollected || 0),
-      Number(r.expenseCost || 0), Number(r.laborCost || 0),
+      Number(r.expenseCost || 0), Number(r.autoLaborCost || 0), Number(r.laborCost || 0),
+      Number(r.actualHours || 0), r.budgetHours != null ? Number(r.budgetHours) : '',
       Number(r.grossProfit || 0), r.marginPercent ?? '',
     ])
     const ws1 = XLSX.utils.aoa_to_sheet([profitHeader, ...profitData])
-    ws1['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 10 }]
+    ws1['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 10 }]
     XLSX.utils.book_append_sheet(wb, ws1, '收入成本明细')
 
     const hourHeader = ['项目编号', '项目名称', '客户', '人员', '工时（小时）']
@@ -288,6 +318,7 @@ onMounted(() => {
               </el-select>
               <el-input v-model="profitKeyword" placeholder="项目编号/名称/客户" clearable style="width: 200px; margin-left: 8px" @keyup.enter="fetchProfit" />
               <el-button type="primary" style="margin-left: 8px" @click="fetchProfit">查询</el-button>
+              <el-button v-if="canEditRates" style="margin-left: 8px" @click="openRates">工时单价</el-button>
               <el-button :loading="exportingHours" type="success" style="margin-left: 8px" @click="handleExportHours">导出收入成本及工时明细</el-button>
             </div>
           </div>
@@ -296,13 +327,44 @@ onMounted(() => {
             <el-table-column prop="projectNo" label="项目编号" min-width="150" />
             <el-table-column prop="projectName" label="项目名称" min-width="170" show-overflow-tooltip />
             <el-table-column label="合同总额（元）" min-width="120" align="right">
-              <template #default="{ row }">{{ money(row.contractAmount) }}</template>
+              <template #default="{ row }">{{ money(row.contractAmount) }}  <!-- 工时单价设置 -->
+  <el-dialog v-model="ratesVisible" title="工时单价设置（元/小时）" width="520px">
+    <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px">
+      项目人工成本 = 推算工时 × 单价，自动并入成本分析的"人工合计"；人工成本登记可继续作为调整项。
+    </p>
+    <el-table v-loading="ratesLoading" :data="ratesList" border size="small" max-height="420">
+      <el-table-column prop="userName" label="成员" min-width="120" />
+      <el-table-column label="单价（元/小时）" width="200" align="right">
+        <template #default="{ row }">
+          <el-input-number v-model="row.hourlyRate" :min="0" :max="9999" :precision="2" :controls="false" style="width: 160px" />
+        </template>
+      </el-table-column>
+    </el-table>
+    <template #footer>
+      <el-button @click="ratesVisible = false">取消</el-button>
+      <el-button type="primary" :loading="ratesSaving" @click="handleSaveRates">保存</el-button>
+    </template>
+  </el-dialog>
+</template>
             </el-table-column>
             <el-table-column label="收入（不含税）" min-width="120" align="right">
               <template #default="{ row }">{{ money(row.totalCollected) }}</template>
             </el-table-column>
             <el-table-column label="直接成本（不含税）" min-width="130" align="right">
               <template #default="{ row }">{{ money(row.directCost) }}</template>
+            </el-table-column>
+            <el-table-column label="工时人工（自动）" min-width="120" align="right">
+              <template #default="{ row }">{{ money(row.autoLaborCost || 0) }}</template>
+            </el-table-column>
+            <el-table-column label="人工合计（元）" min-width="120" align="right">
+              <template #default="{ row }">{{ money(row.laborCost) }}</template>
+            </el-table-column>
+            <el-table-column label="工时（实际/预算）" min-width="130" align="right">
+              <template #default="{ row }">
+                <span :style="row.budgetHours && Number(row.actualHours || 0) > Number(row.budgetHours) ? 'color:#f56c6c' : ''">
+                  {{ Number(row.actualHours || 0).toFixed(1) }}{{ row.budgetHours ? ' / ' + Number(row.budgetHours).toFixed(1) : '' }}
+                </span>
+              </template>
             </el-table-column>
             <el-table-column label="毛利（元）" min-width="110" align="right">
               <template #default="{ row }">

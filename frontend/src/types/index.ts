@@ -149,6 +149,7 @@ export interface ProjectItem {
   startDate: string
   endDate: string
   status: ProjectStatus
+  budgetHours?: number
   reportNo?: string
   reportDate?: string
   reportPartnerName?: string
@@ -171,6 +172,7 @@ export interface ProjectRequest {
   siteLeaderName: string
   startDate?: string
   endDate?: string
+  budgetHours?: number
   remark?: string
 }
 
@@ -759,6 +761,9 @@ export interface ProjectProfitItem {
   directCost: number
   expenseCost: number
   laborCost: number
+  autoLaborCost?: number
+  budgetHours?: number | null
+  actualHours?: number
   grossProfit: number
   marginPercent: number | null
 }

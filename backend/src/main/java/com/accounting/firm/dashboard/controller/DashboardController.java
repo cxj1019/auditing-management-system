@@ -181,6 +181,32 @@ public class DashboardController {
                 .eq(Reimbursement::getApplicantId, user.getUserId())
                 .le(Reimbursement::getCreateTime, LocalDateTime.now().minusDays(7)));
         addHealthItem(items, "old-draft", "超过7天未提交的报销草稿", oldDrafts, "/business/reimbursement");
+
+        // 项目工时超预算：当年推算工时 > 预算工时
+        try {
+            int year = java.time.LocalDate.now().getYear();
+            var budgeted = projectMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.accounting.firm.project.entity.Project>()
+                    .isNotNull(com.accounting.firm.project.entity.Project::getBudgetHours));
+            var schedules = scheduleMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.accounting.firm.schedule.entity.Schedule>()
+                    .ge(com.accounting.firm.schedule.entity.Schedule::getScheduleDate, java.time.LocalDate.of(year, 1, 1))
+                    .le(com.accounting.firm.schedule.entity.Schedule::getScheduleDate, java.time.LocalDate.of(year, 12, 31))
+                    .isNotNull(com.accounting.firm.schedule.entity.Schedule::getProjectId));
+            java.util.Map<Long, java.math.BigDecimal> actual = new java.util.LinkedHashMap<>();
+            for (var s : schedules) {
+                actual.merge(s.getProjectId(), com.accounting.firm.schedule.service.ScheduleHoursCalculator.effectiveHours(s),
+                        java.math.BigDecimal::add);
+            }
+            int over = 0;
+            for (var p : budgeted) {
+                if (p.getBudgetHours() != null && p.getBudgetHours().signum() > 0
+                        && actual.getOrDefault(p.getId(), java.math.BigDecimal.ZERO).compareTo(p.getBudgetHours()) > 0) {
+                    over++;
+                }
+            }
+            addHealthItem(items, "budget-hours", "项目工时超预算", (long) over, "/business/cost");
+        } catch (Exception e) {
+            addHealthItem(items, "budget-hours", "项目工时超预算", 0L, "/business/cost");
+        }
         return ApiResult.success(items);
     }
 

@@ -17,6 +17,21 @@ public interface ScheduleService extends IService<Schedule> {
     /** 可选设备清单（会议室/公司车辆等，启用状态） */
     List<ScheduleResource> listResources();
 
+    /** 人 × 项目 工时矩阵（部门范围内，指定日期区间），行：userId/userName/projectId/projectName/hours */
+    List<java.util.Map<String, Object>> hoursMatrix(LocalDate startDate, LocalDate endDate);
+
+    /** 经理确认成员时段工时，返回确认条数 */
+    int confirmHours(LocalDate startDate, LocalDate endDate, Long userId, SecurityUser currentUser);
+
+    /** 已锁定的月份清单（YYYY-MM，升序） */
+    List<String> listLocks();
+
+    /** 锁定月份（仅管理员） */
+    void lockMonth(String month, SecurityUser currentUser);
+
+    /** 解锁月份（仅管理员） */
+    void unlockMonth(String month, SecurityUser currentUser);
+
     List<Schedule> listByDateRange(LocalDate startDate, LocalDate endDate, Long projectId, Long userId);
 
     /** 创建日程 */

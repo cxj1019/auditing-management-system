@@ -15,6 +15,29 @@ export function listScheduleResources(): Promise<{ id: number; name: string; res
   return request.get('/schedules/resources')
 }
 
+/** 人 × 项目 工时矩阵 */
+export function getHoursMatrix(params: { startDate: string; endDate: string }): Promise<{ userId: number; userName: string; projectId: number | null; projectName: string; hours: number }[]> {
+  return request.get('/schedules/hours-matrix', { params })
+}
+
+/** 确认成员时段工时，返回确认条数 */
+export function confirmHours(params: { startDate: string; endDate: string; userId?: number }): Promise<number> {
+  return request.post('/schedules/confirm', null, { params })
+}
+
+/** 已锁定月份清单 */
+export function listLocks(): Promise<string[]> {
+  return request.get('/schedules/locks')
+}
+
+export function lockMonth(month: string): Promise<void> {
+  return request.post('/schedules/locks', null, { params: { month } })
+}
+
+export function unlockMonth(month: string): Promise<void> {
+  return request.delete('/schedules/locks', { params: { month } })
+}
+
 export function getHoursSummary(params: {
   startDate: string
   endDate: string

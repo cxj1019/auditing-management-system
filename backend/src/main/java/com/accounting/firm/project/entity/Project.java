@@ -81,6 +81,9 @@ public class Project implements Serializable {
     /** 备注 */
     private String remark;
 
+    /** 预算工时（可空）；用于工时消耗对比与超预算预警 */
+    private java.math.BigDecimal budgetHours;
+
     @TableField(fill = FieldFill.INSERT)
     private String createBy;
 

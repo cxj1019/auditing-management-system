@@ -59,4 +59,7 @@ public class ProjectRequest {
 
     @Size(max = 500, message = "备注长度不能超过 500")
     private String remark;
+
+    /** 预算工时（可空） */
+    private java.math.BigDecimal budgetHours;
 }

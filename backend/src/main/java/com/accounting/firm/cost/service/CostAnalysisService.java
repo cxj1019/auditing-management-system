@@ -20,6 +20,12 @@ public interface CostAnalysisService extends IService<LaborCost> {
     /** 项目工时汇总（按规则推算，含部门隔离），供导出 */
     List<java.util.Map<String, Object>> projectHours(String keyword, Integer year);
 
+    /** 工时单价清单（全员，含未设置的默认 0） */
+    List<java.util.Map<String, Object>> laborRates();
+
+    /** 保存工时单价（系统管理员） */
+    void saveLaborRates(List<com.accounting.firm.cost.dto.LaborRateItem> rates, String operator);
+
     /** 人员工时明细（项目 × 人员，含部门隔离），供导出 */
     List<java.util.Map<String, Object>> projectHourDetails(String keyword, Integer year);
 

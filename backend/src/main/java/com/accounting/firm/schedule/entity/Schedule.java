@@ -71,6 +71,13 @@ public class Schedule implements Serializable {
     /** 预约设备（会议室/公司车辆等），可空 */
     private Long resourceId;
 
+    /** 工时确认：0-未确认 1-已确认（经理确认） */
+    private Integer confirmed;
+
+    private String confirmedBy;
+
+    private java.time.LocalDateTime confirmedTime;
+
     /** 非数据库字段：设备名称（联表填充） */
     @TableField(exist = false)
     private String resourceName;

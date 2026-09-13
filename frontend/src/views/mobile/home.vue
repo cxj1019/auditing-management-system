@@ -117,7 +117,7 @@ onMounted(async () => {
     <div class="mh-header">
       <div>
         <div class="mh-greeting">{{ greeting }}，{{ userStore.nickname }}</div>
-        <div class="mh-sub">欢迎使用会计师事务所管理系统</div>
+        <div class="mh-sub">本周工时 <b style="color:#2563eb">{{ Number(summary?.weekHours ?? 0).toFixed(1) }}</b> 小时</div>
       </div>
       <el-badge :value="unreadCount" :hidden="unreadCount <= 0" :max="99">
         <el-icon :size="22" class="mh-bell" @click="openNotif"><Bell /></el-icon>

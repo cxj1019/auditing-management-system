@@ -15,6 +15,7 @@ public interface CostAnalysisMapper {
     @Select("""
             <script>
             SELECT p.id AS project_id, p.project_no, p.name AS project_name, cl.client_name,
+                   p.budget_hours AS budget_hours,
                    COALESCE(amt.contract_amount, 0) AS contract_amount,
                    COALESCE(rev.income, 0) AS total_collected,
                    COALESCE(exp.expense, 0) AS expense_cost,

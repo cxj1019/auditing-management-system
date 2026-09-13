@@ -10,8 +10,10 @@ import com.accounting.firm.project.entity.Project;
 import com.accounting.firm.project.mapper.ProjectMapper;
 import com.accounting.firm.schedule.dto.ScheduleRequest;
 import com.accounting.firm.schedule.entity.Schedule;
+import com.accounting.firm.schedule.entity.ScheduleLock;
 import com.accounting.firm.schedule.entity.ScheduleResource;
 import com.accounting.firm.schedule.mapper.ScheduleMapper;
+import com.accounting.firm.schedule.mapper.ScheduleLockMapper;
 import com.accounting.firm.schedule.mapper.ScheduleResourceMapper;
 import com.accounting.firm.schedule.service.ScheduleHoursCalculator;
 import com.accounting.firm.schedule.service.ScheduleService;
@@ -37,6 +39,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
     private final ProjectMapper projectMapper;
     private final SysUserMapper sysUserMapper;
     private final ScheduleResourceMapper scheduleResourceMapper;
+    private final ScheduleLockMapper scheduleLockMapper;
     private final DataScopeService dataScopeService;
 
     @Override
@@ -59,10 +62,22 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         return list;
     }
 
+    /** 日程日期所在月份被锁定时禁止增删改 */
+    private void requireNotLocked(java.time.LocalDate date) {
+        if (date == null) return;
+        String month = date.toString().substring(0, 7);
+        Long locks = scheduleLockMapper.selectCount(new LambdaQueryWrapper<ScheduleLock>()
+                .eq(ScheduleLock::getLockMonth, month));
+        if (locks != null && locks > 0) {
+            throw new BusinessException(month + " 月工时已锁定，不能修改");
+        }
+    }
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createSchedule(ScheduleRequest request, SecurityUser currentUser) {
         requireValidProject(request.getProjectId());
+        requireNotLocked(request.getScheduleDate());
         // 为每位选中成员创建日程；未选则默认为当前用户
         List<Long> targetUserIds = (request.getUserIds() != null && !request.getUserIds().isEmpty())
                 ? request.getUserIds()
@@ -84,6 +99,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         if (schedule == null) {
             throw new BusinessException("日程不存在");
         }
+        requireNotLocked(schedule.getScheduleDate());
         requireValidProject(request.getProjectId());
         copyFields(request, schedule);
         updateById(schedule);
@@ -96,6 +112,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         if (schedule == null) {
             throw new BusinessException("日程不存在");
         }
+        requireNotLocked(schedule.getScheduleDate());
         if (StringUtils.hasText(schedule.getEventId())) {
             remove(new LambdaQueryWrapper<Schedule>().eq(Schedule::getEventId, schedule.getEventId()));
         } else {
@@ -114,6 +131,95 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
     }
 
     @Override
+    public List<java.util.Map<String, Object>> hoursMatrix(LocalDate startDate, LocalDate endDate) {
+        List<Long> scopeUserIds = dataScopeService.getDeptScopedUserIds();
+        LambdaQueryWrapper<Schedule> wrapper = new LambdaQueryWrapper<>();
+        wrapper.ge(startDate != null, Schedule::getScheduleDate, startDate)
+                .le(endDate != null, Schedule::getScheduleDate, endDate);
+        if (scopeUserIds != null) {
+            wrapper.in(Schedule::getUserId, scopeUserIds);
+        }
+        List<Schedule> schedules = list(wrapper);
+        java.util.Map<String, long[]> agg = new java.util.LinkedHashMap<>();
+        List<Long> userIds = new java.util.ArrayList<>();
+        List<Long> projectIds = new java.util.ArrayList<>();
+        for (Schedule s : schedules) {
+            if (s.getUserId() == null) continue;
+            if (!userIds.contains(s.getUserId())) userIds.add(s.getUserId());
+            if (s.getProjectId() != null && !projectIds.contains(s.getProjectId())) projectIds.add(s.getProjectId());
+            long minutes = ScheduleHoursCalculator.effectiveHours(s).multiply(java.math.BigDecimal.valueOf(60)).longValue();
+            agg.computeIfAbsent(s.getUserId() + "|" + (s.getProjectId() == null ? "0" : s.getProjectId()),
+                    k -> new long[1])[0] += minutes;
+        }
+        Map<Long, String> nameById = memberNames(userIds);
+        Map<Long, String> projectNames = projectIds.isEmpty() ? Map.of()
+                : projectMapper.selectBatchIds(projectIds).stream()
+                        .collect(Collectors.toMap(Project::getId, Project::getName));
+        List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
+        for (var entry : agg.entrySet()) {
+            String[] parts = entry.getKey().split("\\|");
+            Long userId = Long.parseLong(parts[0]);
+            Long projectId = Long.parseLong(parts[1]);
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("userId", userId);
+            row.put("userName", nameById.getOrDefault(userId, "用户" + userId));
+            row.put("projectId", projectId == 0 ? null : projectId);
+            row.put("projectName", projectId == 0 ? "未关联项目" : projectNames.getOrDefault(projectId, "项目" + projectId));
+            row.put("hours", entry.getValue()[0] / 60.0);
+            result.add(row);
+        }
+        result.sort((a, b) -> {
+            int byUser = String.valueOf(a.get("userName")).compareTo(String.valueOf(b.get("userName")));
+            return byUser != 0 ? byUser : String.valueOf(a.get("projectName")).compareTo(String.valueOf(b.get("projectName")));
+        });
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int confirmHours(LocalDate startDate, LocalDate endDate, Long userId, SecurityUser currentUser) {
+        LambdaQueryWrapper<Schedule> wrapper = new LambdaQueryWrapper<Schedule>()
+                .ge(startDate != null, Schedule::getScheduleDate, startDate)
+                .le(endDate != null, Schedule::getScheduleDate, endDate)
+                .eq(userId != null, Schedule::getUserId, userId)
+                .eq(Schedule::getConfirmed, 0);
+        List<Schedule> targets = list(wrapper);
+        for (Schedule s : targets) {
+            s.setConfirmed(1);
+            s.setConfirmedBy(currentUser.getNickname() != null ? currentUser.getNickname() : currentUser.getUsername());
+            s.setConfirmedTime(java.time.LocalDateTime.now());
+        }
+        updateBatchById(targets);
+        return targets.size();
+    }
+
+    @Override
+    public List<String> listLocks() {
+        return scheduleLockMapper.selectList(new LambdaQueryWrapper<ScheduleLock>()
+                        .orderByAsc(ScheduleLock::getLockMonth))
+                .stream().map(ScheduleLock::getLockMonth).toList();
+    }
+
+    @Override
+    public void lockMonth(String month, SecurityUser currentUser) {
+        if (month == null || !month.matches("\\d{4}-\\d{2}")) {
+            throw new BusinessException("月份格式应为 YYYY-MM");
+        }
+        Long exists = scheduleLockMapper.selectCount(new LambdaQueryWrapper<ScheduleLock>()
+                .eq(ScheduleLock::getLockMonth, month));
+        if (exists != null && exists > 0) return;
+        ScheduleLock lock = new ScheduleLock();
+        lock.setLockMonth(month);
+        lock.setLockedBy(currentUser.getUsername());
+        scheduleLockMapper.insert(lock);
+    }
+
+    @Override
+    public void unlockMonth(String month, SecurityUser currentUser) {
+        scheduleLockMapper.delete(new LambdaQueryWrapper<ScheduleLock>()
+                .eq(ScheduleLock::getLockMonth, month));
+    }
+
     public List<Map<String, Object>> hoursSummary(LocalDate startDate, LocalDate endDate) {
         // 按日程归属成员（user_id）过滤与聚合；日程可能由管理员/项目经理代建，创建人 ≠ 归属人
         List<Long> scopeUserIds = dataScopeService.getDeptScopedUserIds();
@@ -127,16 +233,41 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
 
         // 按成员聚合，工时按规则推算（全天 7 小时/有时间按净工时/加班 4 小时强制休息 1 小时）
         Map<Long, BigDecimal> hoursByUser = new LinkedHashMap<>();
+        Map<Long, BigDecimal> overtimeByUser = new LinkedHashMap<>();
         for (Schedule s : schedules) {
-            hoursByUser.merge(s.getUserId(), ScheduleHoursCalculator.effectiveHours(s), BigDecimal::add);
+            BigDecimal h = ScheduleHoursCalculator.effectiveHours(s);
+            hoursByUser.merge(s.getUserId(), h, BigDecimal::add);
+            if ("加班".equals(s.getType())) {
+                overtimeByUser.merge(s.getUserId(), h, BigDecimal::add);
+            }
         }
+        // 标准工时 = 月数 × 174h（21.75 天 × 8h），利用率 = 实际 / 标准
+        long months = 1;
+        if (startDate != null && endDate != null) {
+            months = java.time.temporal.ChronoUnit.MONTHS.between(
+                    startDate.withDayOfMonth(1), endDate.withDayOfMonth(1)) + 1;
+        }
+        BigDecimal stdHours = BigDecimal.valueOf(174).multiply(BigDecimal.valueOf(months));
         Map<Long, String> nameByUser = memberNames(hoursByUser.keySet().stream().toList());
         List<Map<String, Object>> result = new ArrayList<>();
         for (var entry : hoursByUser.entrySet()) {
+            BigDecimal total = entry.getValue();
+            BigDecimal overtime = overtimeByUser.getOrDefault(entry.getKey(), BigDecimal.ZERO);
+            BigDecimal utilization = stdHours.signum() > 0
+                    ? total.multiply(BigDecimal.valueOf(100)).divide(stdHours, 1, java.math.RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("userId", entry.getKey());
             row.put("memberName", nameByUser.getOrDefault(entry.getKey(), ""));
             row.put("totalHours", entry.getValue());
+            row.put("overtimeHours", overtime);
+            row.put("stdHours", stdHours);
+            row.put("utilization", utilization);
+            row.put("confirmedCount", list(new LambdaQueryWrapper<Schedule>()
+                    .eq(Schedule::getUserId, entry.getKey())
+                    .eq(Schedule::getConfirmed, 1)
+                    .ge(startDate != null, Schedule::getScheduleDate, startDate)
+                    .le(endDate != null, Schedule::getScheduleDate, endDate)).size());
             result.add(row);
         }
         return result;

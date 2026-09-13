@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import com.accounting.firm.common.security.SecurityUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -78,6 +80,22 @@ public class CostAnalysisController {
     }
 
     /** 分页查询人工成本 */
+    /** 工时单价清单（成本分析可见者可查） */
+    @PreAuthorize("hasAuthority('business:cost:list')")
+    @GetMapping("/labor-rates")
+    public ApiResult<List<java.util.Map<String, Object>>> laborRates() {
+        return ApiResult.success(costAnalysisService.laborRates());
+    }
+
+    /** 保存工时单价（仅管理员） */
+    @PreAuthorize("hasAuthority('business:cost:labor-edit')")
+    @PutMapping("/labor-rates")
+    public ApiResult<Void> saveLaborRates(@RequestBody List<com.accounting.firm.cost.dto.LaborRateItem> rates,
+                                          @AuthenticationPrincipal SecurityUser currentUser) {
+        costAnalysisService.saveLaborRates(rates, currentUser.getUsername());
+        return ApiResult.success();
+    }
+
     @PreAuthorize("hasAuthority('business:cost:list')")
     @GetMapping("/labor")
     public ApiResult<PageResult<LaborCost>> laborPage(@RequestParam(defaultValue = "1") long current,

@@ -50,3 +50,13 @@ export function getProjectHours(keyword?: string, year?: number): Promise<Projec
 export function getExpenseStats(year?: number): Promise<ExpenseStatItem[]> {
   return request.get('/cost/expense-stats', { params: { year } })
 }
+
+/** 工时单价清单（全员） */
+export function getLaborRates(): Promise<{ userId: number; userName: string; hourlyRate: number }[]> {
+  return request.get('/cost/labor-rates')
+}
+
+/** 保存工时单价（仅管理员） */
+export function saveLaborRates(rates: { userId: number; hourlyRate: number }[]): Promise<void> {
+  return request.put('/cost/labor-rates', rates)
+}

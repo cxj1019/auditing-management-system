@@ -112,6 +112,7 @@ const form = reactive<ProjectRequest>({
   siteLeaderName: '',
   startDate: '',
   endDate: '',
+  budgetHours: undefined,
   remark: '',
 })
 /** 在册人员选项（供项目经理/现场负责人下拉选择） */
@@ -143,7 +144,7 @@ async function loadUserOptions(): Promise<void> {
 function openCreate(): void {
   isEdit.value = false
   // 默认归属创建人所在部门，可改选
-  Object.assign(form, { id: undefined, name: '', type: '', bizNature: '收入型', bizType: '', clientId: 0, deptId: userStore.deptId ?? 0, managerName: '', siteLeaderName: '', startDate: '', endDate: '', remark: '' })
+  Object.assign(form, { id: undefined, name: '', type: '', bizNature: '收入型', bizType: '', clientId: 0, deptId: userStore.deptId ?? 0, managerName: '', siteLeaderName: '', startDate: '', endDate: '', budgetHours: undefined, remark: '' })
   loadUserOptions()
   loadClientOptions()
   loadDeptOptions()

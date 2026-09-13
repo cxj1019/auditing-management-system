@@ -67,7 +67,7 @@ const emptyForm = (): ProjectRequest => ({
   name: '', type: '', bizNature: '收入型', bizType: '',
   clientId: 0, deptId: userStore.deptId ?? 0,
   partnerName: '', managerName: '', siteLeaderName: '',
-  startDate: '', endDate: '', remark: '',
+  startDate: '', endDate: '', budgetHours: undefined, remark: '',
 })
 const form = reactive<ProjectRequest>(emptyForm())
 
@@ -120,6 +120,7 @@ function openEdit(p: ProjectItem): void {
     siteLeaderName: p.siteLeaderName || '',
     startDate: p.startDate || '',
     endDate: p.endDate || '',
+    budgetHours: p.budgetHours ?? undefined,
     remark: p.remark || '',
   })
   editingId.value = p.id
@@ -191,6 +192,7 @@ onMounted(fetchList)
         <div class="mp-row"><span>现场负责人</span>{{ p.siteLeaderName || '—' }}</div>
         <div class="mp-row"><span>归属部门</span>{{ p.deptName || '—' }}</div>
         <div class="mp-row"><span>项目期间</span>{{ p.startDate || '—' }} ~ {{ p.endDate || '—' }}</div>
+        <div class="mp-row" v-if="p.budgetHours"><span>预算工时</span>{{ p.budgetHours }} h</div>
         <div class="mp-row" v-if="p.reportNo"><span>报告文号</span>{{ p.reportNo }}（{{ p.reportDate || '' }}）</div>
         <div class="mp-row" v-if="p.remark"><span>备注</span>{{ p.remark }}</div>
         <div v-if="canEdit && p.status === 0" class="mp-actions">
@@ -233,6 +235,9 @@ onMounted(fetchList)
         <el-form-item label="现场负责人"><el-input v-model="form.siteLeaderName" maxlength="30" /></el-form-item>
         <el-form-item label="开始日期"><el-date-picker v-model="form.startDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
         <el-form-item label="结束日期"><el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
+        <el-form-item label="预算工时">
+          <el-input-number v-model="form.budgetHours" :min="0" :max="99999" :precision="1" :controls="false" style="width: 100%" placeholder="可选" />
+        </el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
       <template #footer>

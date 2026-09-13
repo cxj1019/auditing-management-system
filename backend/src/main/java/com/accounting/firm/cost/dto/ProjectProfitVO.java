@@ -33,6 +33,15 @@ public class ProjectProfitVO {
     /** 其中：人工成本合计 */
     private BigDecimal laborCost;
 
+    /** 工时自动人工成本（推算工时 × 人员单价），已并入 laborCost */
+    private BigDecimal autoLaborCost;
+
+    /** 预算工时 */
+    private BigDecimal budgetHours;
+
+    /** 实际投入工时（当年推算） */
+    private BigDecimal actualHours;
+
     /** 毛利 = 已收 − 直接成本 */
     private BigDecimal grossProfit;
 

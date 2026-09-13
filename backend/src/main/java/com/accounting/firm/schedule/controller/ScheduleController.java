@@ -2,6 +2,7 @@ package com.accounting.firm.schedule.controller;
 
 import com.accounting.firm.common.aop.AuditLog;
 import com.accounting.firm.common.api.ApiResult;
+import com.accounting.firm.common.api.ResultCode;
 import com.accounting.firm.common.security.SecurityUser;
 import com.accounting.firm.schedule.dto.ScheduleRequest;
 import com.accounting.firm.schedule.entity.Schedule;
@@ -78,6 +79,52 @@ public class ScheduleController {
     @GetMapping("/resources")
     public ApiResult<List<com.accounting.firm.schedule.entity.ScheduleResource>> resources() {
         return ApiResult.success(scheduleService.listResources());
+    }
+
+    /** 人 × 项目 工时矩阵（部门范围内） */
+    @PreAuthorize("hasAuthority('business:schedule:hours')")
+    @GetMapping("/hours-matrix")
+    public ApiResult<List<java.util.Map<String, Object>>> hoursMatrix(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ApiResult.success(scheduleService.hoursMatrix(startDate, endDate));
+    }
+
+    /** 经理确认成员时段工时 */
+    @PreAuthorize("hasAuthority('business:schedule:hours')")
+    @PostMapping("/confirm")
+    public ApiResult<Integer> confirm(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+                                      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+                                      @RequestParam(required = false) Long userId,
+                                      @AuthenticationPrincipal SecurityUser currentUser) {
+        return ApiResult.success(scheduleService.confirmHours(startDate, endDate, userId, currentUser));
+    }
+
+    /** 已锁定月份清单 */
+    @GetMapping("/locks")
+    public ApiResult<List<String>> locks() {
+        return ApiResult.success(scheduleService.listLocks());
+    }
+
+    /** 锁定/解锁月份（仅管理员） */
+    @PostMapping("/locks")
+    public ApiResult<Void> lockMonth(@RequestParam String month,
+                                     @AuthenticationPrincipal SecurityUser currentUser) {
+        if (!currentUser.hasRole("admin")) {
+            return ApiResult.error(ResultCode.FORBIDDEN);
+        }
+        scheduleService.lockMonth(month, currentUser);
+        return ApiResult.success();
+    }
+
+    @DeleteMapping("/locks")
+    public ApiResult<Void> unlockMonth(@RequestParam String month,
+                                       @AuthenticationPrincipal SecurityUser currentUser) {
+        if (!currentUser.hasRole("admin")) {
+            return ApiResult.error(ResultCode.FORBIDDEN);
+        }
+        scheduleService.unlockMonth(month, currentUser);
+        return ApiResult.success();
     }
 
     /** 工时汇总（仅管理员/项目经理） */
