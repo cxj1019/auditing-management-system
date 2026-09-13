@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listSchedules, createSchedule, listScheduleResources } from '@/api/schedule'
-import { getUserOptions } from '@/api/user'
+import { getUserOptions, getDepartmentOptions } from '@/api/user'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { useUserStore } from '@/stores/user'
 import type { ProjectItem, ScheduleItem, UserOption } from '@/types'
@@ -66,7 +66,13 @@ function goToday(): void {
 }
 
 // ---------- 成员 ----------
-interface Member { id: number; name: string; color: string; initial: string }
+interface Member { id: number; name: string; color: string; initial: string; deptId: number | null }
+
+const deptOptions = ref<{ id: number; deptName: string }[]>([])
+const deptFilter = ref<number | undefined>(undefined)
+const visibleMembers = computed(() =>
+  deptFilter.value ? members.value.filter((m) => m.deptId === deptFilter.value) : members.value,
+)
 
 function avatarColor(name: string): string {
   let hash = 0
@@ -98,12 +104,12 @@ async function fetchAll(): Promise<void> {
       if (!s.userId || map.has(s.userId)) continue
       const opt = optById.get(s.userId)
       const name = opt?.nickname || s.creatorName || `用户${s.userId}`
-      map.set(s.userId, { id: s.userId, name, color: avatarColor(name), initial: name.charAt(0) })
+      map.set(s.userId, { id: s.userId, name, color: avatarColor(name), initial: name.charAt(0), deptId: opt?.deptId ?? null })
     }
     for (const u of users) {
       if (!map.has(u.id)) {
         const name = u.nickname || u.username
-        map.set(u.id, { id: u.id, name, color: avatarColor(name), initial: name.charAt(0) })
+        map.set(u.id, { id: u.id, name, color: avatarColor(name), initial: name.charAt(0), deptId: u.deptId ?? null })
       }
     }
     // 本人置顶
@@ -233,6 +239,13 @@ onMounted(fetchAll)
       <el-icon @click="shiftWeek(1)"><ArrowRight /></el-icon>
     </div>
 
+    <!-- 部门筛选 -->
+    <div class="ms-dept">
+      <el-select v-model="deptFilter" clearable placeholder="全部部门" size="small" style="width: 100%">
+        <el-option v-for="d in deptOptions" :key="d.id" :label="d.deptName" :value="d.id" />
+      </el-select>
+    </div>
+
     <!-- 成员 × 日期矩阵：横向滑动 -->
     <div class="ms-board" v-loading="loading">
       <table class="ms-table">
@@ -246,7 +259,7 @@ onMounted(fetchAll)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="m in members" :key="m.id">
+          <tr v-for="m in visibleMembers" :key="m.id">
             <td class="ms-member-col">
               <div class="ms-member">
                 <span class="ms-avatar" :style="{ background: m.color }">{{ m.initial }}</span>
@@ -271,8 +284,8 @@ onMounted(fetchAll)
               </div>
             </td>
           </tr>
-          <tr v-if="!members.length && !loading">
-            <td class="ms-empty" :colspan="8">本周暂无成员日程</td>
+          <tr v-if="!visibleMembers.length && !loading">
+            <td class="ms-empty" :colspan="8">该部门暂无成员日程</td>
           </tr>
         </tbody>
       </table>
@@ -349,6 +362,7 @@ onMounted(fetchAll)
 .ms-week-bar { display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 10px; }
 .ms-week-bar .el-icon { font-size: 18px; color: #4b5563; cursor: pointer; padding: 6px; }
 .ms-week-label { font-size: 15px; font-weight: 600; cursor: pointer; }
+.ms-dept { padding: 0 12px; margin-bottom: 8px; }
 .ms-board { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 210px); background: #fff; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; -webkit-overflow-scrolling: touch; }
 .ms-table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .ms-table th, .ms-table td { border-right: 1px solid #f0f1f3; border-bottom: 1px solid #f0f1f3; padding: 0; vertical-align: top; }
@@ -359,7 +373,7 @@ th.ms-day-col { position: sticky; top: 0; z-index: 3; padding: 6px 4px; text-ali
 .ms-day-md.today { color: #2563eb; }
 .ms-day-week { font-size: 11px; color: #9ca3af; }
 th.ms-day-col.today { background: #eef4ff; }
-th.ms-member-col { z-index: 4; }
+th.ms-member-col { top: 0; z-index: 4; }
 td.ms-day-col { padding: 4px; min-height: 64px; height: 64px; }
 td.ms-member-col { padding: 10px 8px; }
 .ms-member { display: flex; align-items: center; gap: 8px; }
