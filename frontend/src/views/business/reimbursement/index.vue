@@ -909,7 +909,8 @@ onMounted(() => {
             <el-table-column label="归集项目" min-width="140" show-overflow-tooltip>
               <template #default="{ row }">
                 <template v-if="row.projectId">{{ projectLabel(row.projectId) }}</template>
-                <span v-else style="color: #9ca3af">随单头</span>
+                <span v-else-if="detail.projectId" style="color: #9ca3af">随单头（{{ projectLabel(detail.projectId) }}）</span>
+                <span v-else style="color: #9ca3af">—</span>
               </template>
             </el-table-column>
             <el-table-column label="可向客户收" width="90" align="center">
