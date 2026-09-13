@@ -535,7 +535,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="page-container">
+  <div class="page-container schedule-full">
     <el-card shadow="never" :body-style="{ padding: '0' }">
       <!-- 顶部工具栏 -->
       <div class="toolbar">
@@ -786,7 +786,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.toolbar {
+.schedule-full { padding: 0; }
+.schedule-full :deep(.el-card) { border: none; border-radius: 0; box-shadow: none; }
+.schedule-full :deep(.el-card__body) { padding: 0; }
+.schedule-full .toolbar { padding: 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); background: var(--el-bg-color); }
+.schedule-full .week-grid { max-height: calc(100vh - 123px); border-right: none; }
+.schedule-full .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
