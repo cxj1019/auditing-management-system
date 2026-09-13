@@ -59,6 +59,9 @@ public class VendorPayment implements Serializable {
     /** 供应商发票号（可后补） */
     private String invoiceNo;
 
+    /** 关联进项发票 ID（NULL = 预付，尚未取得发票） */
+    private Long vendorInvoiceId;
+
     private Integer status;
 
     private String approverName;
@@ -84,7 +87,11 @@ public class VendorPayment implements Serializable {
 
     /** 非数据库字段：项目名称 */
     @TableField(exist = false)
+    /** 非数据库字段：项目名称 */
     private String projectName;
+
+    /** 非数据库字段：已核销金额（同一进项发票的付款合计，列表展示用，付款场景不填） */
+    private java.math.BigDecimal paidAmount;
 
     /** 非数据库字段：合同编号 */
     @TableField(exist = false)

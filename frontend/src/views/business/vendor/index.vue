@@ -6,8 +6,9 @@ import {
   pageVendorPayments, createVendorPayment, updateVendorPayment, submitVendorPayment,
   withdrawVendorPayment, deleteVendorPayment, approveVendorPayment, markVendorPaid,
   listVendorAttachments, uploadVendorAttachment, deleteVendorAttachment, downloadVendorAttachment,
+  listVendorInvoices, createVendorInvoice, updateVendorInvoice, deleteVendorInvoice, writeOffPayment as writeOffPaymentApi,
 } from '@/api/vendor'
-import type { VendorAttachmentItem, VendorPaymentItem } from '@/api/vendor'
+import type { VendorAttachmentItem, VendorInvoiceItem, VendorPaymentItem } from '@/api/vendor'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import type { ProjectItem } from '@/types'
 import { useUserStore } from '@/stores/user'
@@ -26,9 +27,124 @@ const canDelete = computed(() => userStore.hasPermission('business:vendor:delete
 const canApprove = computed(() => userStore.hasPermission('business:vendor:approve'))
 
 const loading = ref(false)
+const activeTab = ref('payments')
 const records = ref<VendorPaymentItem[]>([])
 const total = ref(0)
 const query = reactive({ current: 1, size: 10, status: undefined as number | undefined, keyword: '' })
+
+// 进项发票
+const invoiceRows = ref<VendorInvoiceItem[]>([])
+const invoiceLoading = ref(false)
+const invoiceDialogVisible = ref(false)
+const invoiceSaving = ref(false)
+const editingInvoiceId = ref<number | null>(null)
+const invoiceForm = reactive({
+  vendorName: '', invoiceNo: '', type: '增值税专用发票',
+  taxRate: undefined as number | undefined, amount: 0,
+  amountExTax: undefined as number | undefined, taxAmount: undefined as number | undefined,
+  invoiceDate: new Date().toISOString().slice(0, 10), projectId: undefined as number | undefined, remark: '',
+})
+
+const writeOffVisible = ref(false)
+const writeOffRow = ref<VendorPaymentItem | null>(null)
+const writeOffInvoiceId = ref<number | undefined>(undefined)
+
+function onInvoiceAmountChange(): void {
+  if (invoiceForm.amount == null || invoiceForm.amount <= 0) return
+  if (invoiceForm.taxRate == null) {
+    invoiceForm.amountExTax = invoiceForm.amount
+    invoiceForm.taxAmount = 0
+    return
+  }
+  const ex = Math.round((invoiceForm.amount / (1 + invoiceForm.taxRate / 100)) * 100) / 100
+  invoiceForm.amountExTax = ex
+  invoiceForm.taxAmount = Math.round((invoiceForm.amount - ex) * 100) / 100
+}
+
+async function fetchInvoices(): Promise<void> {
+  invoiceLoading.value = true
+  try {
+    invoiceRows.value = (await listVendorInvoices()).rows
+  } finally {
+    invoiceLoading.value = false
+  }
+}
+
+function onTabChange(tab: string): void {
+  if (tab === 'invoices') fetchInvoices()
+}
+
+function openInvoiceCreate(): void {
+  Object.assign(invoiceForm, {
+    vendorName: '', invoiceNo: '', type: '增值税专用发票', taxRate: undefined, amount: 0,
+    amountExTax: undefined, taxAmount: undefined,
+    invoiceDate: new Date().toISOString().slice(0, 10), projectId: undefined, remark: '',
+  })
+  editingInvoiceId.value = null
+  invoiceDialogVisible.value = true
+}
+
+function openInvoiceEdit(row: VendorInvoiceItem): void {
+  Object.assign(invoiceForm, {
+    vendorName: row.vendorName, invoiceNo: row.invoiceNo || '', type: row.type,
+    taxRate: row.taxRate ?? undefined, amount: Number(row.amount),
+    amountExTax: row.amountExTax != null ? Number(row.amountExTax) : undefined,
+    taxAmount: row.taxAmount != null ? Number(row.taxAmount) : undefined,
+    invoiceDate: row.invoiceDate || new Date().toISOString().slice(0, 10),
+    projectId: row.projectId ?? undefined, remark: row.remark || '',
+  })
+  editingInvoiceId.value = row.id
+  invoiceDialogVisible.value = true
+}
+
+async function handleInvoiceSave(): Promise<void> {
+  if (!invoiceForm.vendorName.trim()) { ElMessage.warning('请填写供应商'); return }
+  if (!invoiceForm.amount || invoiceForm.amount <= 0) { ElMessage.warning('请填写价税合计'); return }
+  invoiceSaving.value = true
+  try {
+    if (editingInvoiceId.value) {
+      await updateVendorInvoice({ ...invoiceForm, id: editingInvoiceId.value })
+      ElMessage.success('进项发票已更新')
+    } else {
+      await createVendorInvoice({ ...invoiceForm })
+      ElMessage.success('进项发票已登记')
+    }
+    invoiceDialogVisible.value = false
+    fetchInvoices()
+  } finally {
+    invoiceSaving.value = false
+  }
+}
+
+async function handleInvoiceDelete(row: VendorInvoiceItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`删除「${row.vendorName}」的进项发票？已核销的付款会先被要求取消关联。`, '删除确认', { type: 'warning' })
+  } catch { return }
+  await deleteVendorInvoice(row.id)
+  ElMessage.success('已删除')
+  fetchInvoices()
+}
+
+function openWriteOff(row: VendorPaymentItem): void {
+  writeOffRow.value = row
+  writeOffInvoiceId.value = undefined
+  if (!invoiceRows.value.length) fetchInvoices()
+  writeOffVisible.value = true
+}
+
+async function handleWriteOff(): Promise<void> {
+  if (!writeOffRow.value || !writeOffInvoiceId.value) {
+    ElMessage.warning('请选择要核销的进项发票')
+    return
+  }
+  await writeOffPaymentApi(writeOffRow.value.id, writeOffInvoiceId.value)
+  ElMessage.success('已核销')
+  writeOffVisible.value = false
+  fetchList()
+}
+
+/** 核销弹窗里可选的发票：按供应商匹配优先，其次全部未足额核销的 */
+const writeOffCandidates = computed(() => invoiceRows.value)
 
 const projectOptions = ref<ProjectItem[]>([])
 
@@ -75,6 +191,7 @@ const form = reactive({
   paymentDate: new Date().toISOString().slice(0, 10),
   paymentMethod: '转账',
   invoiceNo: '',
+  vendorInvoiceId: undefined as number | undefined,
   remark: '',
 })
 
@@ -94,7 +211,7 @@ function openCreate(): void {
   Object.assign(form, {
     vendorName: '', summary: '', projectId: undefined, amount: 0,
     taxRate: undefined, taxAmount: undefined, amountExTax: undefined,
-    paymentDate: new Date().toISOString().slice(0, 10), paymentMethod: '转账', invoiceNo: '', remark: '',
+    paymentDate: new Date().toISOString().slice(0, 10), paymentMethod: '转账', invoiceNo: '', vendorInvoiceId: undefined, remark: '',
   })
   editingId.value = null
   dialogVisible.value = true
@@ -112,6 +229,7 @@ function openEdit(row: VendorPaymentItem): void {
     paymentDate: row.paymentDate || new Date().toISOString().slice(0, 10),
     paymentMethod: row.paymentMethod || '转账',
     invoiceNo: row.invoiceNo || '',
+    vendorInvoiceId: (row as unknown as { vendorInvoiceId?: number }).vendorInvoiceId ?? undefined,
     remark: '',
   })
   editingId.value = row.id
@@ -246,6 +364,8 @@ onMounted(async () => {
 <template>
   <div class="page-container">
     <el-card shadow="never">
+      <el-tabs v-model="activeTab" @tab-change="onTabChange">
+        <el-tab-pane label="付款记录" name="payments">
       <div class="table-toolbar">
         <div class="toolbar-filters">
           <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px">
@@ -276,6 +396,15 @@ onMounted(async () => {
         <el-table-column label="归集项目" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">{{ row.projectName || '—' }}</template>
         </el-table-column>
+        <el-table-column label="发票" min-width="110" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.vendorInvoiceId">
+              {{ (invoiceRows.find((i) => i.id === row.vendorInvoiceId) || {}).invoiceNo || ('发票#' + row.vendorInvoiceId) }}
+            </span>
+            <el-tag v-else-if="row.status === 2 || row.status === 4" type="warning" size="small">预付未核销</el-tag>
+            <span v-else style="color: #9ca3af">—</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="creatorName" label="登记人" width="90" />
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
@@ -292,6 +421,10 @@ onMounted(async () => {
             </template>
             <template v-else-if="row.status === 2">
               <el-button v-if="canApprove" link type="success" size="small" @click="handleMarkPaid(row)">标记已付款</el-button>
+              <el-button v-if="canEdit && !row.vendorInvoiceId" link type="primary" size="small" @click="openWriteOff(row)">核销发票</el-button>
+            </template>
+            <template v-else-if="row.status === 4">
+              <el-button v-if="canEdit && !row.vendorInvoiceId" link type="primary" size="small" @click="openWriteOff(row)">核销发票</el-button>
             </template>
           </template>
         </el-table-column>
@@ -306,6 +439,36 @@ onMounted(async () => {
           @current-change="fetchList"
         />
       </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="进项发票" name="invoices" lazy>
+          <div class="table-toolbar">
+            <span class="section-title">供应商进项发票（付款核销用）</span>
+            <el-button v-if="canAdd" type="primary" @click="openInvoiceCreate">登记发票</el-button>
+          </div>
+          <el-table v-loading="invoiceLoading" :data="invoiceRows" border stripe>
+            <el-table-column prop="invoiceNo" label="发票号" min-width="120" />
+            <el-table-column prop="vendorName" label="供应商" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="type" label="类型" width="130" />
+            <el-table-column label="价税合计（元）" min-width="120" align="right">
+              <template #default="{ row }">{{ money(row.amount) }}</template>
+            </el-table-column>
+            <el-table-column label="已核销（元）" min-width="110" align="right">
+              <template #default="{ row }">{{ money(row.paidAmount) }}</template>
+            </el-table-column>
+            <el-table-column prop="invoiceDate" label="开票日期" width="110" />
+            <el-table-column label="归集项目" min-width="130" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.projectName || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="130" fixed="right">
+              <template #default="{ row }">
+                <el-button v-if="canEdit" link type="primary" size="small" @click="openInvoiceEdit(row)">编辑</el-button>
+                <el-button v-if="canDelete" link type="danger" size="small" @click="handleInvoiceDelete(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
 
     <!-- 登记/编辑付款 -->
@@ -345,6 +508,16 @@ onMounted(async () => {
         <el-form-item label="供应商发票号">
           <el-input v-model="form.invoiceNo" maxlength="50" placeholder="可选" />
         </el-form-item>
+        <el-form-item label="关联进项发票">
+          <el-select v-model="form.vendorInvoiceId" clearable filterable placeholder="不选 = 预付，取得发票后可核销" style="width: 100%" @visible-change="(v: boolean) => v && fetchInvoices()">
+            <el-option
+              v-for="inv in invoiceRows"
+              :key="inv.id"
+              :label="`${inv.invoiceNo || '无票号'} | ${inv.vendorName} | ${money(inv.amount)} 元`"
+              :value="inv.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="归集项目">
           <el-select v-model="form.projectId" clearable filterable placeholder="可选，计入项目成本" style="width: 100%">
             <el-option v-for="p in projectOptions" :key="p.id" :label="`${p.projectNo} | ${p.name}`" :value="p.id" />
@@ -382,8 +555,8 @@ onMounted(async () => {
 
         <div class="items-header" style="margin-top: 14px">
           <span class="section-title">附件（发票扫描件 / 付款凭证）</span>
-          <div v-if="canEdit && (detail.status === 0 || detail.status === 3)">
-            <CaptureUpload :uploading="attUploading" text="选择文件" @pick="handleUpload" />
+          <div v-if="canEdit">
+            <CaptureUpload :uploading="attUploading" text="拍照 / 选择文件" @pick="handleUpload" />
           </div>
         </div>
         <el-table v-loading="attLoading" :data="attachments" border size="small">
@@ -396,12 +569,31 @@ onMounted(async () => {
           <el-table-column label="操作" width="130">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="handleDownload(row)">下载</el-button>
-              <el-button v-if="canEdit && detail.status === 0" link type="danger" size="small" @click="handleDeleteAtt(row)">删除</el-button>
+              <el-button v-if="canEdit" link type="danger" size="small" @click="handleDeleteAtt(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
       </template>
     </el-drawer>
+
+    <!-- 预付核销 -->
+    <el-dialog v-model="writeOffVisible" title="核销到进项发票" width="480px">
+      <p v-if="writeOffRow" style="margin: 0 0 8px; color: #6b7280; font-size: 13px">
+        付款单 {{ writeOffRow.paymentNo }}（{{ money(writeOffRow.amount) }} 元，{{ writeOffRow.vendorName }}）
+      </p>
+      <el-select v-model="writeOffInvoiceId" filterable placeholder="选择进项发票" style="width: 100%">
+        <el-option
+          v-for="inv in writeOffCandidates"
+          :key="inv.id"
+          :label="`${inv.invoiceNo || '无票号'} | ${inv.vendorName} | ${money(inv.amount)} 元（已核销 ${money(inv.paidAmount)}）`"
+          :value="inv.id"
+        />
+      </el-select>
+      <template #footer>
+        <el-button @click="writeOffVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleWriteOff">核销</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

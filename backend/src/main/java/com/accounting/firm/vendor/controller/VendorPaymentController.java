@@ -109,6 +109,47 @@ public class VendorPaymentController {
         return ApiResult.success();
     }
 
+    // ---------- 进项发票 ----------
+    /** 进项发票清单（含每张已核销金额） */
+    @PreAuthorize("hasAuthority('business:vendor:list')")
+    @GetMapping("/vendor-invoices")
+    public ApiResult<java.util.Map<String, Object>> invoices(@RequestParam(required = false) String keyword) {
+        return ApiResult.success(vendorPaymentService.listInvoicesWithPaid(keyword));
+    }
+
+    /** 登记进项发票 */
+    @PreAuthorize("hasAuthority('business:vendor:add')")
+    @PostMapping("/vendor-invoices")
+    public ApiResult<Long> createInvoice(@RequestBody com.accounting.firm.vendor.entity.VendorInvoice invoice,
+                                         @AuthenticationPrincipal SecurityUser currentUser) {
+        return ApiResult.success(vendorPaymentService.createInvoice(invoice, currentUser));
+    }
+
+    /** 编辑进项发票 */
+    @PreAuthorize("hasAuthority('business:vendor:edit')")
+    @PutMapping("/vendor-invoices")
+    public ApiResult<Void> updateInvoice(@RequestBody com.accounting.firm.vendor.entity.VendorInvoice invoice) {
+        vendorPaymentService.updateInvoice(invoice);
+        return ApiResult.success();
+    }
+
+    /** 删除进项发票（被核销引用时拒绝） */
+    @PreAuthorize("hasAuthority('business:vendor:delete')")
+    @DeleteMapping("/vendor-invoices/{id}")
+    public ApiResult<Void> deleteInvoice(@PathVariable Long id) {
+        vendorPaymentService.deleteInvoice(id);
+        return ApiResult.success();
+    }
+
+    /** 预付款核销到进项发票 */
+    @PreAuthorize("hasAuthority('business:vendor:edit')")
+    @PutMapping("/{id}/write-off")
+    public ApiResult<Void> writeOff(@PathVariable Long id, @RequestParam Long invoiceId,
+                                    @AuthenticationPrincipal SecurityUser currentUser) {
+        vendorPaymentService.writeOff(id, invoiceId, currentUser);
+        return ApiResult.success();
+    }
+
     // ---------- 附件（供应商发票扫描件/付款凭证） ----------
 
     @PreAuthorize("hasAuthority('business:vendor:list')")

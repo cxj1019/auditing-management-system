@@ -25,6 +25,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -42,6 +43,7 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
     private static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
 
     private final VendorPaymentAttachmentMapper attachmentMapper;
+    private final com.accounting.firm.vendor.mapper.VendorInvoiceMapper vendorInvoiceMapper;
     private final SupabaseStorageService storageService;
     private final DataScopeService dataScopeService;
     private final com.accounting.firm.project.mapper.ProjectMapper projectMapper;
@@ -277,6 +279,10 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
     }
 
     private void copyFields(VendorPayment request, VendorPayment payment) {
+        if (request.getVendorInvoiceId() != null) {
+            requireValidInvoice(request.getVendorInvoiceId());
+        }
+        payment.setVendorInvoiceId(request.getVendorInvoiceId());
         payment.setVendorName(request.getVendorName().trim());
         payment.setSummary(request.getSummary());
         payment.setProjectId(request.getProjectId());
@@ -291,6 +297,106 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
     }
 
     /** 付款编号：FK + 年份 + 4 位流水（按年份独立递增） */
+    private void requireValidInvoice(Long invoiceId) {
+        if (vendorInvoiceMapper.selectById(invoiceId) == null) {
+            throw new BusinessException("关联的进项发票不存在");
+        }
+    }
+
+    /** 预付款核销到进项发票 */
+    @Override
+    public void writeOff(Long id, Long invoiceId, SecurityUser currentUser) {
+        VendorPayment payment = getById(id);
+        if (payment == null) {
+            throw new BusinessException("付款单不存在");
+        }
+        requireValidInvoice(invoiceId);
+        payment.setVendorInvoiceId(invoiceId);
+        updateById(payment);
+    }
+
+    @Override
+    public List<com.accounting.firm.vendor.entity.VendorInvoice> listInvoices(String keyword) {
+        LambdaQueryWrapper<com.accounting.firm.vendor.entity.VendorInvoice> wrapper = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(keyword)) {
+            wrapper.and(w -> w.like(com.accounting.firm.vendor.entity.VendorInvoice::getVendorName, keyword)
+                    .or().like(com.accounting.firm.vendor.entity.VendorInvoice::getInvoiceNo, keyword));
+        }
+        wrapper.orderByDesc(com.accounting.firm.vendor.entity.VendorInvoice::getId);
+        return vendorInvoiceMapper.selectList(wrapper);
+    }
+
+    @Override
+    public java.util.Map<String, Object> listInvoicesWithPaid(String keyword) {
+        List<com.accounting.firm.vendor.entity.VendorInvoice> invoices = listInvoices(keyword);
+        // 已核销金额：按发票聚合付款
+        Map<Long, BigDecimal> paidByInvoice = new java.util.LinkedHashMap<>();
+        for (VendorPayment p : list()) {
+            if (p.getVendorInvoiceId() != null) {
+                paidByInvoice.merge(p.getVendorInvoiceId(), nvl(p.getAmount()), BigDecimal::add);
+            }
+        }
+        List<java.util.Map<String, Object>> rows = new java.util.ArrayList<>();
+        for (com.accounting.firm.vendor.entity.VendorInvoice inv : invoices) {
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("id", inv.getId());
+            row.put("vendorName", inv.getVendorName());
+            row.put("invoiceNo", inv.getInvoiceNo());
+            row.put("type", inv.getType());
+            row.put("taxRate", inv.getTaxRate());
+            row.put("amount", inv.getAmount());
+            row.put("amountExTax", inv.getAmountExTax());
+            row.put("taxAmount", inv.getTaxAmount());
+            row.put("invoiceDate", inv.getInvoiceDate());
+            row.put("projectId", inv.getProjectId());
+            row.put("remark", inv.getRemark());
+            row.put("paidAmount", paidByInvoice.getOrDefault(inv.getId(), BigDecimal.ZERO));
+            if (inv.getProjectId() != null) {
+                var pj = projectMapper.selectById(inv.getProjectId());
+                row.put("projectName", pj == null ? null : pj.getName());
+            }
+            rows.add(row);
+        }
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("rows", rows);
+        return data;
+    }
+
+    private static BigDecimal nvl(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createInvoice(com.accounting.firm.vendor.entity.VendorInvoice invoice, SecurityUser currentUser) {
+        invoice.setId(null);
+        invoice.setCreateBy(currentUser.getUsername());
+        invoice.setCreatorName(currentUser.getNickname() != null ? currentUser.getNickname() : currentUser.getUsername());
+        vendorInvoiceMapper.insert(invoice);
+        return invoice.getId();
+    }
+
+    @Override
+    public void updateInvoice(com.accounting.firm.vendor.entity.VendorInvoice invoice) {
+        if (invoice.getId() == null) {
+            throw new BusinessException("进项发票 ID 不能为空");
+        }
+        if (vendorInvoiceMapper.selectById(invoice.getId()) == null) {
+            throw new BusinessException("进项发票不存在");
+        }
+        vendorInvoiceMapper.updateById(invoice);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteInvoice(Long id) {
+        Long refs = lambdaQuery().eq(VendorPayment::getVendorInvoiceId, id).count();
+        if (refs != null && refs > 0) {
+            throw new BusinessException("该进项发票已被 " + refs + " 笔付款核销，先取消关联再删除");
+        }
+        vendorInvoiceMapper.deleteById(id);
+    }
+
     private String generateNo() {
         String year = String.valueOf(LocalDate.now().getYear());
         String prefix = "FK" + year;

@@ -30,6 +30,23 @@ public interface VendorPaymentService extends IService<VendorPayment> {
 
     void markPaid(Long id, SecurityUser currentUser);
 
+    /** 预付款核销到进项发票 */
+    void writeOff(Long id, Long invoiceId, SecurityUser currentUser);
+
+    /** 进项发票清单（含每张已核销金额） */
+    java.util.Map<String, Object> listInvoicesWithPaid(String keyword);
+
+    List<com.accounting.firm.vendor.entity.VendorInvoice> listInvoices(String keyword);
+
+    /** 登记进项发票 */
+    Long createInvoice(com.accounting.firm.vendor.entity.VendorInvoice invoice, SecurityUser currentUser);
+
+    /** 编辑进项发票 */
+    void updateInvoice(com.accounting.firm.vendor.entity.VendorInvoice invoice);
+
+    /** 删除进项发票（被核销引用时拒绝） */
+    void deleteInvoice(Long id);
+
     List<VendorPaymentAttachment> listAttachments(Long paymentId);
 
     VendorPaymentAttachment uploadAttachment(Long paymentId, MultipartFile file, SecurityUser currentUser);

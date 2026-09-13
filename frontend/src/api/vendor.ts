@@ -25,6 +25,22 @@ export interface VendorPaymentItem {
   createTime?: string
 }
 
+export interface VendorInvoiceItem {
+  id: number
+  vendorName: string
+  invoiceNo?: string
+  type: string
+  taxRate?: number | null
+  amount: number
+  amountExTax?: number | null
+  taxAmount?: number | null
+  invoiceDate?: string
+  projectId?: number | null
+  projectName?: string | null
+  remark?: string
+  paidAmount?: number
+}
+
 export interface VendorPaymentRequest {
   id?: number
   vendorName: string
@@ -37,6 +53,7 @@ export interface VendorPaymentRequest {
   paymentDate: string
   paymentMethod?: string
   invoiceNo?: string
+  vendorInvoiceId?: number | null
   remark?: string
 }
 
@@ -112,4 +129,26 @@ export async function downloadVendorAttachment(id: number, attachmentId: number,
   link.download = fileName
   link.click()
   URL.revokeObjectURL(url)
+}
+
+// ---------- 进项发票 ----------
+export function listVendorInvoices(keyword?: string): Promise<{ rows: VendorInvoiceItem[] }> {
+  return request.get('/vendor-payments/vendor-invoices', { params: keyword ? { keyword } : {} })
+}
+
+export function createVendorInvoice(data: Partial<VendorInvoiceItem>): Promise<number> {
+  return request.post('/vendor-payments/vendor-invoices', data)
+}
+
+export function updateVendorInvoice(data: Partial<VendorInvoiceItem>): Promise<void> {
+  return request.put('/vendor-payments/vendor-invoices', data)
+}
+
+export function deleteVendorInvoice(id: number): Promise<void> {
+  return request.delete(`/vendor-payments/vendor-invoices/${id}`)
+}
+
+/** 预付款核销到进项发票 */
+export function writeOffPayment(id: number, invoiceId: number): Promise<void> {
+  return request.put(`/vendor-payments/${id}/write-off?invoiceId=${invoiceId}`)
 }
