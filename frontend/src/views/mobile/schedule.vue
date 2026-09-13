@@ -223,7 +223,17 @@ async function handleSave(): Promise<void> {
   }
 }
 
-onMounted(fetchAll)
+let deptsLoaded = false
+function loadDepts(visible: boolean): void {
+  if (!visible || deptsLoaded) return
+  deptsLoaded = true
+  getDepartmentOptions().then((d) => { deptOptions.value = d }).catch(() => { deptsLoaded = false })
+}
+
+onMounted(() => {
+  fetchAll()
+  loadDepts(true)
+})
 </script>
 
 <template>
