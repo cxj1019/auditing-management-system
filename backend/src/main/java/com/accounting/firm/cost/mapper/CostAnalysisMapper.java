@@ -39,7 +39,7 @@ public interface CostAnalysisMapper {
                                        ELSE i.amount END) AS expense
                        FROM reimbursement_item i
                        JOIN reimbursement r ON r.id = i.reimbursement_id
-                       WHERE r.status = 1 AND COALESCE(i.project_id, r.project_id) IS NOT NULL
+                       WHERE r.status IN (2, 4) AND COALESCE(i.project_id, r.project_id) IS NOT NULL
                        GROUP BY COALESCE(i.project_id, r.project_id)) exp ON exp.project_id = p.id
             LEFT JOIN (SELECT project_id, SUM(amount) AS labor
                        FROM labor_cost GROUP BY project_id) l ON l.project_id = p.id
@@ -110,7 +110,7 @@ public interface CostAnalysisMapper {
                                        ELSE i.amount END) AS amount
                        FROM reimbursement_item i
                        JOIN reimbursement r ON r.id = i.reimbursement_id
-                       WHERE r.status = 1
+                       WHERE r.status IN (2, 4)
                        GROUP BY 1) exp ON exp.ym = m.ym
             LEFT JOIN (SELECT cost_month AS ym, SUM(amount) AS amount
                        FROM labor_cost GROUP BY 1) lab ON lab.ym = m.ym
