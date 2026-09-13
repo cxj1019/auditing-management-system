@@ -790,7 +790,9 @@ onMounted(() => {
 .schedule-full :deep(.el-card) { border: none; border-radius: 0; box-shadow: none; }
 .schedule-full :deep(.el-card__body) { padding: 0; }
 .schedule-full .toolbar { padding: 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); background: var(--el-bg-color); }
-.schedule-full .week-grid { max-height: calc(100vh - 123px); border-right: none; }
+.schedule-full :deep(.el-card) { overflow: visible; }
+.schedule-full { overflow: visible; }
+.schedule-full .week-grid { border-right: none; }
 .schedule-full .toolbar {
   display: flex;
   justify-content: space-between;
@@ -807,10 +809,8 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 180px repeat(7, minmax(0, 1fr));
   border-right: 1px solid #e5e7eb;
-  /* 成员多时网格内部滚动，日期表头固定在顶部 */
-  max-height: calc(100vh - 200px);
-  min-height: 320px;
-  overflow-y: auto;
+  /* 表头吸附随页面滚动（唯一滚动条在内容区最右侧） */
+  overflow: visible;
 }
 .grid-header {
   position: sticky;
