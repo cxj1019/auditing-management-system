@@ -1,7 +1,11 @@
 package com.accounting.firm.common.security;
 
+import com.accounting.firm.system.entity.SysRole;
 import com.accounting.firm.system.entity.SysUser;
+import com.accounting.firm.system.entity.SysUserRole;
+import com.accounting.firm.system.mapper.SysRoleMapper;
 import com.accounting.firm.system.mapper.SysUserMapper;
+import com.accounting.firm.system.mapper.SysUserRoleMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,6 +24,8 @@ import java.util.List;
 public class DataScopeService {
 
     private final SysUserMapper sysUserMapper;
+    private final SysUserRoleMapper sysUserRoleMapper;
+    private final SysRoleMapper sysRoleMapper;
 
     /** 数据范围类型：ALL-全部（admin） DEPT-本部门 SELF-仅本人创建 */
     public enum ScopeType { ALL, DEPT, SELF }
@@ -62,6 +68,26 @@ public class DataScopeService {
             return new Scope(ScopeType.DEPT, user.getDeptId(), user.getUserId(), user.getUsername());
         }
         return new Scope(ScopeType.SELF, null, user.getUserId(), user.getUsername());
+    }
+
+    /** 角色层级：合伙人=3 经理=2 员工及其他=1（admin/finance 由调用方单独放行，这里 admin=9） */
+    public int roleLevel(Long userId) {
+        if (userId == null) return 1;
+        List<Long> roleIds = sysUserRoleMapper.selectList(
+                        new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, userId))
+                .stream().map(SysUserRole::getRoleId).toList();
+        if (roleIds.isEmpty()) return 1;
+        List<SysRole> roles = sysRoleMapper.selectBatchIds(roleIds);
+        int level = 1;
+        for (SysRole role : roles) {
+            level = switch (role.getRoleCode()) {
+                case "admin" -> 9;
+                case "partner" -> 3;
+                case "manager" -> Math.max(level, 2);
+                default -> level;
+            };
+        }
+        return level;
     }
 
     /**

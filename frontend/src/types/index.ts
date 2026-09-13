@@ -263,6 +263,8 @@ export interface ScheduleItem {
   hours: number
   type: string
   eventId?: string
+  resourceId?: number
+  resourceName?: string
   createBy?: string
   createTime?: string
 }
@@ -279,6 +281,7 @@ export interface ScheduleRequest {
   endTime?: string
   hours: number
   type: string
+  resourceId?: number
 }
 
 /** 合同 */

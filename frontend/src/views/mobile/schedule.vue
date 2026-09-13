@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { listSchedules, createSchedule } from '@/api/schedule'
+import { listSchedules, createSchedule, listScheduleResources } from '@/api/schedule'
 import { getUserOptions } from '@/api/user'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { useUserStore } from '@/stores/user'
@@ -155,6 +155,7 @@ const projectOptions = ref<ProjectItem[]>([])
 const form = reactive({
   userId: undefined as number | undefined,
   projectId: undefined as number | undefined,
+  resourceId: undefined as number | undefined,
   title: '',
   description: '',
   scheduleDate: todayStr,
@@ -163,11 +164,13 @@ const form = reactive({
   hours: 7,
   type: '会议',
 })
+const resourceOptions = ref<{ id: number; name: string; resourceType: string }[]>([])
 
 function openCreate(userId?: number, date?: string): void {
   Object.assign(form, {
     userId: userId ?? userStore.userId ?? undefined,
     projectId: undefined,
+    resourceId: undefined,
     title: '',
     description: '',
     scheduleDate: date ?? todayStr,
@@ -179,6 +182,9 @@ function openCreate(userId?: number, date?: string): void {
   formVisible.value = true
   if (!projectOptions.value.length) {
     projectOptionsApi().then((p) => { projectOptions.value = p }).catch(() => { /* 无项目选项也可建日程 */ })
+  }
+  if (!resourceOptions.value.length) {
+    listScheduleResources().then((r) => { resourceOptions.value = r }).catch(() => { /* 设备选项失败可跳过 */ })
   }
 }
 
@@ -192,6 +198,7 @@ async function handleSave(): Promise<void> {
     await createSchedule({
       userId: form.userId,
       projectId: form.projectId,
+      resourceId: form.resourceId,
       title: form.title,
       description: form.description,
       scheduleDate: form.scheduleDate,
@@ -259,7 +266,7 @@ onMounted(fetchAll)
                 class="ms-chip"
                 @click.stop="openDetail(s)"
               >
-                <div class="ms-chip-title">{{ s.title }}</div>
+                <div class="ms-chip-title" :title="s.resourceName || ''">{{ s.title }}</div>
                 <div class="ms-chip-time">{{ itemTime(s) }}<template v-if="s.hours"> · {{ s.hours }}h</template></div>
               </div>
             </td>
@@ -279,6 +286,7 @@ onMounted(fetchAll)
         <div class="ms-detail-row"><span class="ms-detail-label">时间</span>{{ itemTime(detail) }}<template v-if="detail.hours">（{{ detail.hours }} 小时）</template></div>
         <div class="ms-detail-row"><span class="ms-detail-label">类型</span>{{ detail.type }}</div>
         <div class="ms-detail-row"><span class="ms-detail-label">项目</span>{{ detail.projectName || '—' }}</div>
+        <div class="ms-detail-row"><span class="ms-detail-label">设备</span>{{ detail.resourceName || '—' }}</div>
         <div class="ms-detail-row"><span class="ms-detail-label">说明</span>{{ detail.description || '—' }}</div>
         <div class="ms-detail-row"><span class="ms-detail-label">创建人</span>{{ detail.creatorName || '—' }}</div>
       </template>
@@ -311,6 +319,11 @@ onMounted(fetchAll)
         </el-form-item>
         <el-form-item label="工时">
           <el-input-number v-model="form.hours" :min="0" :max="24" :precision="1" :controls="false" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="设备">
+          <el-select v-model="form.resourceId" style="width: 100%" clearable placeholder="会议室 / 公司车辆（可选）">
+            <el-option v-for="r in resourceOptions" :key="r.id" :label="`${r.resourceType} · ${r.name}`" :value="r.id" />
+          </el-select>
         </el-form-item>
         <el-form-item label="项目">
           <el-select v-model="form.projectId" style="width: 100%" clearable filterable placeholder="可选">

@@ -10,7 +10,9 @@ import com.accounting.firm.project.entity.Project;
 import com.accounting.firm.project.mapper.ProjectMapper;
 import com.accounting.firm.schedule.dto.ScheduleRequest;
 import com.accounting.firm.schedule.entity.Schedule;
+import com.accounting.firm.schedule.entity.ScheduleResource;
 import com.accounting.firm.schedule.mapper.ScheduleMapper;
+import com.accounting.firm.schedule.mapper.ScheduleResourceMapper;
 import com.accounting.firm.schedule.service.ScheduleHoursCalculator;
 import com.accounting.firm.schedule.service.ScheduleService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -34,7 +36,15 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
 
     private final ProjectMapper projectMapper;
     private final SysUserMapper sysUserMapper;
+    private final ScheduleResourceMapper scheduleResourceMapper;
     private final DataScopeService dataScopeService;
+
+    @Override
+    public List<ScheduleResource> listResources() {
+        return scheduleResourceMapper.selectList(new LambdaQueryWrapper<ScheduleResource>()
+                .eq(ScheduleResource::getStatus, 1)
+                .orderByAsc(ScheduleResource::getId));
+    }
 
     @Override
     public List<Schedule> listByDateRange(LocalDate startDate, LocalDate endDate, Long projectId, Long userId) {
@@ -151,6 +161,14 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             Map<Long, String> nameMap = memberNames(userIds);
             list.forEach(s -> s.setCreatorName(nameMap.get(s.getUserId())));
         }
+        // 填充预约设备名称
+        List<Long> resourceIds = list.stream()
+                .map(Schedule::getResourceId).filter(java.util.Objects::nonNull).distinct().toList();
+        if (!resourceIds.isEmpty()) {
+            Map<Long, String> resourceMap = scheduleResourceMapper.selectBatchIds(resourceIds).stream()
+                    .collect(Collectors.toMap(ScheduleResource::getId, ScheduleResource::getName));
+            list.forEach(s -> s.setResourceName(resourceMap.get(s.getResourceId())));
+        }
     }
 
     /** 批量查询用户 ID → 显示姓名（昵称为空时回退登录账号） */
@@ -164,6 +182,15 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
                         u -> StringUtils.hasText(u.getNickname()) ? u.getNickname() : u.getUsername()));
     }
 
+    private Long requireValidResource(Long resourceId) {
+        if (resourceId == null) return null;
+        ScheduleResource resource = scheduleResourceMapper.selectById(resourceId);
+        if (resource == null || resource.getStatus() == null || resource.getStatus() != 1) {
+            throw new BusinessException("预约设备不存在或已停用");
+        }
+        return resource.getId();
+    }
+
     private void requireValidProject(Long projectId) {
         if (projectId == null) return;
         Project project = projectMapper.selectById(projectId);
@@ -174,6 +201,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
 
     private void copyFields(ScheduleRequest request, Schedule schedule) {
         schedule.setProjectId(request.getProjectId());
+        schedule.setResourceId(requireValidResource(request.getResourceId()));
         schedule.setTitle(StringUtils.hasText(request.getTitle()) ? request.getTitle() : null);
         schedule.setDescription(request.getDescription());
         schedule.setScheduleDate(request.getScheduleDate());

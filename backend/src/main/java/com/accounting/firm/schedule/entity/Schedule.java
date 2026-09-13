@@ -67,4 +67,11 @@ public class Schedule implements Serializable {
     /** 非数据库字段：项目名称（联表填充） */
     @TableField(exist = false)
     private String projectName;
+
+    /** 预约设备（会议室/公司车辆等），可空 */
+    private Long resourceId;
+
+    /** 非数据库字段：设备名称（联表填充） */
+    @TableField(exist = false)
+    private String resourceName;
 }

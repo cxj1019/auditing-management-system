@@ -4,6 +4,7 @@ import com.accounting.firm.common.api.PageResult;
 import com.accounting.firm.common.security.SecurityUser;
 import com.accounting.firm.schedule.dto.ScheduleRequest;
 import com.accounting.firm.schedule.entity.Schedule;
+import com.accounting.firm.schedule.entity.ScheduleResource;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.time.LocalDate;
@@ -13,6 +14,9 @@ import java.util.Map;
 public interface ScheduleService extends IService<Schedule> {
 
     /** 按日期范围查询日程（当前用户或全部） */
+    /** 可选设备清单（会议室/公司车辆等，启用状态） */
+    List<ScheduleResource> listResources();
+
     List<Schedule> listByDateRange(LocalDate startDate, LocalDate endDate, Long projectId, Long userId);
 
     /** 创建日程 */

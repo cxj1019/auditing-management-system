@@ -10,6 +10,11 @@ export function listSchedules(params: {
   return request.get('/schedules', { params })
 }
 
+/** 可选设备清单（会议室/公司车辆等） */
+export function listScheduleResources(): Promise<{ id: number; name: string; resourceType: string; status: number }[]> {
+  return request.get('/schedules/resources')
+}
+
 export function getHoursSummary(params: {
   startDate: string
   endDate: string

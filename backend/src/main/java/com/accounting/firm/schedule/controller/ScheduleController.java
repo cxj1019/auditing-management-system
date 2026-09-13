@@ -76,6 +76,12 @@ public class ScheduleController {
 
     /** 工时汇总（仅管理员/项目经理） */
     @PreAuthorize("hasAuthority('business:schedule:hours')")
+    /** 可选设备清单（会议室/公司车辆等） */
+    @GetMapping("/resources")
+    public ApiResult<List<com.accounting.firm.schedule.entity.ScheduleResource>> resources() {
+        return ApiResult.success(scheduleService.listResources());
+    }
+
     @GetMapping("/hours-summary")
     public ApiResult<List<Map<String, Object>>> hoursSummary(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,

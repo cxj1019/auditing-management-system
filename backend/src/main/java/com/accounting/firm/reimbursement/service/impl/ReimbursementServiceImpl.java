@@ -92,33 +92,48 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         }
     }
 
-    /** 数据范围可见性：admin/财务全部；部门用户=单据归属部门（有项目看项目部门，无项目看申请人部门）；无部门仅本人 */
+    /**
+     * 分层可见性（部门间保持隔离）：
+     * 员工 → 仅本人；经理 → 本部门员工/经理的单；合伙人 → 本部门员工/经理的单 + 全所合伙人的单（互看互审）；
+     * 经理/合伙人本人的单对同级与上级可见；admin/财务看全部。
+     */
     private boolean visible(Reimbursement bill, SecurityUser user) {
         if (user.hasRole("admin") || user.hasRole("finance")) {
             return true;
         }
-        Long billDept = resolveDept(bill);
-        if (billDept == null) {
-            return isApplicant(bill, user);
+        int viewerLevel = dataScopeService.roleLevel(user.getUserId());
+        Long applicantId = bill.getApplicantId();
+        if (viewerLevel >= 3) {
+            // 合伙人：全所合伙人的单 + 本部门员工/经理的单
+            if (dataScopeService.roleLevel(applicantId) >= 3) {
+                return true;
+            }
+            return sameDept(applicantId, user.getDeptId());
         }
-        return billDept.equals(user.getDeptId());
+        if (viewerLevel == 2) {
+            // 经理：本部门员工/经理的单
+            return dataScopeService.roleLevel(applicantId) <= 2 && sameDept(applicantId, user.getDeptId());
+        }
+        // 员工：仅本人
+        return isApplicant(bill, user);
     }
 
-    /** 单据归属部门：有项目取项目部门，否则取申请人部门；都取不到返回 null */
-    private Long resolveDept(Reimbursement bill) {
-        if (bill.getProjectId() != null) {
-            Project project = projectMapper.selectById(bill.getProjectId());
-            if (project != null && project.getDeptId() != null) {
-                return project.getDeptId();
-            }
-        }
-        if (bill.getApplicantId() != null) {
-            SysUser applicant = sysUserMapper.selectById(bill.getApplicantId());
-            if (applicant != null) {
-                return applicant.getDeptId();
-            }
-        }
-        return null;
+    private boolean sameDept(Long applicantId, Long deptId) {
+        if (applicantId == null || deptId == null) return false;
+        SysUser applicant = sysUserMapper.selectById(applicantId);
+        return applicant != null && deptId.equals(applicant.getDeptId());
+    }
+
+    /** 全所合伙人用户 ID 子查询 */
+    private static final String PARTNER_IDS_SQL =
+            "SELECT u.id FROM sys_user u JOIN sys_user_role ur ON ur.user_id = u.id "
+                    + "JOIN sys_role r ON r.id = ur.role_id WHERE r.role_code = 'partner'";
+
+    /** 指定部门、限定角色集合的用户 ID 子查询 */
+    private String deptUserLevelsSql(Long deptId, String roleCodes) {
+        return "SELECT u.id FROM sys_user u JOIN sys_user_role ur ON ur.user_id = u.id "
+                + "JOIN sys_role r ON r.id = ur.role_id WHERE u.dept_id = " + deptId
+                + " AND r.role_code IN " + roleCodes;
     }
 
     @Override
@@ -131,17 +146,23 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
                     .or().like(Reimbursement::getApplicantUsername, keyword)
                     .or().like(Reimbursement::getTitle, keyword));
         }
-        // 数据范围：admin/财务看全部；部门用户=本部门项目单 + 本部门人员无项目的单；无部门仅本人
+        // 分层数据范围：员工仅本人；经理=本部门员工/经理；合伙人=本部门员工/经理 + 全所合伙人；admin/财务全部
         if (!currentUser.hasRole("admin") && !currentUser.hasRole("finance")) {
-            var scope = dataScopeService.currentScope();
-            switch (scope.type()) {
-                case SELF -> wrapper.eq(Reimbursement::getApplicantId, scope.userId());
-                case DEPT -> wrapper.and(w -> w
-                        .inSql(Reimbursement::getProjectId, scope.projectDeptInSql())
-                        .or(w2 -> w2.isNull(Reimbursement::getProjectId)
-                                .inSql(Reimbursement::getApplicantId,
-                                        "SELECT id FROM sys_user WHERE dept_id = " + scope.deptId())));
-                default -> { /* ALL 不过滤 */ }
+            int level = dataScopeService.roleLevel(currentUser.getUserId());
+            Long deptId = currentUser.getDeptId();
+            if (level >= 3) {
+                // 本部门员工/经理的单 + 全所合伙人（含自己）的单
+                wrapper.and(w -> w
+                        .inSql(Reimbursement::getApplicantId, PARTNER_IDS_SQL)
+                        .or(deptId != null, w2 -> w2.inSql(Reimbursement::getApplicantId,
+                                deptUserLevelsSql(deptId, "('employee','manager','partner')"))));
+            } else if (level == 2 && deptId != null) {
+                wrapper.and(w -> w
+                        .eq(Reimbursement::getApplicantId, currentUser.getUserId())
+                        .or(w2 -> w2.inSql(Reimbursement::getApplicantId,
+                                deptUserLevelsSql(deptId, "('employee','manager')"))));
+            } else {
+                wrapper.eq(Reimbursement::getApplicantId, currentUser.getUserId());
             }
         }
         wrapper.orderByDesc(Reimbursement::getCreateTime);
@@ -231,13 +252,17 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         notifyApprovers(bill);
     }
 
-    /** 提交后实时通知可见范围内的审批人（同部门有审批权者 + admin + 财务），排除申请人 */
+    /** 提交后实时通知可见范围内的审批人（申请人同部门有审批权者 + admin + 财务），排除申请人 */
     private void notifyApprovers(Reimbursement bill) {
         try {
             Set<Long> toNotify = new HashSet<>();
             toNotify.addAll(notifyService.userIdsWithRole("admin"));
             toNotify.addAll(notifyService.userIdsWithRole("finance"));
-            Long billDept = resolveDept(bill);
+            Long billDept = null;
+            if (bill.getApplicantId() != null) {
+                SysUser applicant = sysUserMapper.selectById(bill.getApplicantId());
+                billDept = applicant == null ? null : applicant.getDeptId();
+            }
             List<Long> approverIds = notifyService.userIdsWithPermission("business:reimbursement:approve");
             if (billDept != null) {
                 List<Long> deptUserIds = sysUserMapper.selectList(

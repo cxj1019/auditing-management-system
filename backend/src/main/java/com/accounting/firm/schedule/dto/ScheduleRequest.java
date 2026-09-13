@@ -43,4 +43,7 @@ public class ScheduleRequest {
     /** work/leave/travel/other */
     @NotBlank(message = "类型不能为空")
     private String type;
+
+    /** 预约设备 ID（可空） */
+    private Long resourceId;
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listSchedules, createSchedule, updateSchedule, deleteSchedule, exitSchedule, getHoursSummary } from '@/api/schedule'
+import { listSchedules, createSchedule, updateSchedule, deleteSchedule, exitSchedule, getHoursSummary, listScheduleResources } from '@/api/schedule'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { getUserOptions, getDepartmentOptions } from '@/api/user'
 import { useUserStore } from '@/stores/user'
@@ -409,25 +409,29 @@ const isEdit = ref(false)
 const editingId = ref<number | null>(null)
 /** 当前编辑的日程是否为本人参与的那条 */
 const editingIsMine = ref(false)
-const form = reactive<ScheduleRequest & { userIds: number[] }>({
+const resourceOptions = ref<{ id: number; name: string; resourceType: string }[]>([])
+const form = reactive<ScheduleRequest & { userIds: number[]; resourceId: number | undefined }>({
   projectId: undefined, userIds: [], title: '', description: '',
   scheduleDate: todayStr(),
   endDate: todayStr(),
   startTime: '', endTime: '', hours: 7, type: '会议',
+  resourceId: undefined,
 })
 const projectOptions = ref<{ id: number; name: string }[]>([])
 
 async function loadOptions(): Promise<void> {
-  const [pData, uData, dData] = await Promise.all([
+  const [pData, uData, dData, rData] = await Promise.all([
     // 专用选项接口：非归档项目、按归属部门隔离
     projectOptionsApi(),
     getUserOptions(),
     // 用免权限的 /departments/options，普通员工也能打开本页
     getDepartmentOptions(),
+    listScheduleResources().catch(() => []),
   ])
   projectOptions.value = pData
   userOptions.value = uData
   deptOptions.value = dData
+  resourceOptions.value = rData
 }
 
 function openCreate(userId?: number, date?: string, time?: string): void {
@@ -439,6 +443,7 @@ function openCreate(userId?: number, date?: string, time?: string): void {
     scheduleDate: date || todayStr(),
     endDate: date || todayStr(),
     startTime: time || '', endTime: '', hours: 7, type: '会议',
+    resourceId: undefined,
   })
   loadOptions()
   dialogVisible.value = true
@@ -454,6 +459,7 @@ function openEdit(row: ScheduleItem): void {
     endDate: row.endDate || row.scheduleDate,
     startTime: row.startTime || '', endTime: row.endTime || '',
     hours: row.hours, type: row.type,
+    resourceId: row.resourceId,
   })
   loadOptions()
   dialogVisible.value = true
@@ -629,7 +635,7 @@ onMounted(() => {
               v-for="ev in dayTimed(d.date)" :key="'tm' + ev.s.id"
               class="day-event"
               :style="{ top: (ev.start / 1440) * 100 + '%', height: Math.max(9, (ev.dur / 1440) * 100) + '%', background: eventColorMap.get(eventKey(ev.s)) || bandColors[0] }"
-              :title="ev.s.type + (ev.s.projectName ? ' · ' + ev.s.projectName : '') + (ev.s.title ? ' · ' + ev.s.title : '')"
+              :title="ev.s.type + (ev.s.projectName ? ' · ' + ev.s.projectName : '') + (ev.s.resourceName ? ' · ' + ev.s.resourceName : '') + (ev.s.title ? ' · ' + ev.s.title : '')"
               @click.stop="openEdit(ev.s)"
             >
               <span class="day-event-text">{{ ev.s.startTime }} {{ ev.s.type }}{{ ev.s.projectName ? ' · ' + ev.s.projectName : '' }}</span>
@@ -702,6 +708,11 @@ onMounted(() => {
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item label="预约设备（可选）">
+          <el-select v-model="form.resourceId" clearable placeholder="会议室 / 公司车辆等" style="width: 100%">
+            <el-option v-for="r in resourceOptions" :key="r.id" :label="`${r.resourceType} · ${r.name}`" :value="r.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="标题（可选）">
           <el-input v-model="form.title" maxlength="200" />
         </el-form-item>
