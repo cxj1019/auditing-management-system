@@ -69,7 +69,8 @@ function goToday(): void {
 interface Member { id: number; name: string; color: string; initial: string; deptId: number | null }
 
 const deptOptions = ref<{ id: number; deptName: string }[]>([])
-const deptFilter = ref<number | undefined>(undefined)
+/** 默认展示本部门成员（与桌面周板一致） */
+const deptFilter = ref<number | undefined>(userStore.deptId ?? undefined)
 const visibleMembers = computed(() =>
   deptFilter.value ? members.value.filter((m) => m.deptId === deptFilter.value) : members.value,
 )
@@ -239,19 +240,17 @@ onMounted(fetchAll)
       <el-icon @click="shiftWeek(1)"><ArrowRight /></el-icon>
     </div>
 
-    <!-- 部门筛选 -->
-    <div class="ms-dept">
-      <el-select v-model="deptFilter" clearable placeholder="全部部门" size="small" style="width: 100%">
-        <el-option v-for="d in deptOptions" :key="d.id" :label="d.deptName" :value="d.id" />
-      </el-select>
-    </div>
-
     <!-- 成员 × 日期矩阵：横向滑动 -->
     <div class="ms-board" v-loading="loading">
       <table class="ms-table">
         <thead>
           <tr>
-            <th class="ms-member-col">成员</th>
+            <th class="ms-member-col">
+              <div class="ms-corner">成员</div>
+              <el-select v-model="deptFilter" clearable placeholder="全部部门" size="small" style="width: 100%" @visible-change="loadDepts">
+                <el-option v-for="d in deptOptions" :key="d.id" :label="d.deptName" :value="d.id" />
+              </el-select>
+            </th>
             <th v-for="d in days" :key="d.date" class="ms-day-col" :class="{ today: d.isToday }">
               <div class="ms-day-md" :class="{ today: d.isToday }">{{ d.md }}</div>
               <div class="ms-day-week">{{ d.week }}</div>
@@ -362,7 +361,8 @@ onMounted(fetchAll)
 .ms-week-bar { display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 10px; }
 .ms-week-bar .el-icon { font-size: 18px; color: #4b5563; cursor: pointer; padding: 6px; }
 .ms-week-label { font-size: 15px; font-weight: 600; cursor: pointer; }
-.ms-dept { padding: 0 12px; margin-bottom: 8px; }
+.ms-corner { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+th.ms-member-col .el-select { --el-select-width: 84px; }
 .ms-board { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 210px); background: #fff; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; -webkit-overflow-scrolling: touch; }
 .ms-table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .ms-table th, .ms-table td { border-right: 1px solid #f0f1f3; border-bottom: 1px solid #f0f1f3; padding: 0; vertical-align: top; }
