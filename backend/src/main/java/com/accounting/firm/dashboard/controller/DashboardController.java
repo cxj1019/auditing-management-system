@@ -77,13 +77,7 @@ public class DashboardController {
         todo.setExpiringContract(countExpiringContracts(today, scope));
         vo.setTodo(todo);
 
-        // 普通员工不展示工时与成本/经营数据
-        boolean canViewFinance = currentUser.hasRole("admin") || currentUser.hasRole("manager");
-        if (!canViewFinance) {
-            return ApiResult.success(vo);
-        }
-
-        // ---------- 本周工时 + 今日日程（当前用户） ----------
+        // ---------- 本周工时 + 今日日程（当前用户，所有角色可见自己的工时） ----------
         LocalDate monday = today.with(DayOfWeek.MONDAY);
         LocalDate sunday = monday.plusDays(6);
         List<Schedule> weekSchedules = scheduleMapper.selectList(new LambdaQueryWrapper<Schedule>()
@@ -93,6 +87,12 @@ public class DashboardController {
         vo.setWeekHours(weekSchedules.stream()
                 .map(ScheduleHoursCalculator::effectiveHours)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
+
+        // 普通员工不展示成本/经营数据
+        boolean canViewFinance = currentUser.hasRole("admin") || currentUser.hasRole("manager");
+        if (!canViewFinance) {
+            return ApiResult.success(vo);
+        }
 
         List<Schedule> todaySchedules = weekSchedules.stream()
                 .filter(s -> !s.getScheduleDate().isBefore(today)

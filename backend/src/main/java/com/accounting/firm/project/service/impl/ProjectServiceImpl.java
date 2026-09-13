@@ -240,6 +240,7 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         project.setSiteLeaderName(request.getSiteLeaderName());
         project.setStartDate(request.getStartDate());
         project.setEndDate(request.getEndDate());
+        project.setBudgetHours(request.getBudgetHours());
         project.setRemark(request.getRemark());
     }
 }
