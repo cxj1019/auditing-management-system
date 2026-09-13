@@ -28,3 +28,4 @@ Thumbs.db
 # 部署密钥备忘(勿提交)
 deploy-env.txt
 test-results/
+tools_patch/
