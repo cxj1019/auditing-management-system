@@ -60,9 +60,12 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
         // 部门隔离：员工仅看自己登记的；经理/合伙人看本部门项目的付款 + 本部门人员登记的无项目付款 + 自己登记的；
         // admin/财务看全量
         int level = dataScopeService.roleLevel(currentUser.getUserId());
-        if (level <= 1) {
+        boolean seeAll = currentUser.hasRole("admin") || currentUser.hasRole("finance");
+        if (seeAll) {
+            // admin/财务 全量
+        } else if (level <= 1) {
             wrapper.eq(VendorPayment::getCreateBy, currentUser.getUsername());
-        } else if (!currentUser.hasRole("admin") && !currentUser.hasRole("finance")) {
+        } else {
             Long deptId = currentUser.getDeptId();
             if (deptId != null) {
                 wrapper.and(w -> w
