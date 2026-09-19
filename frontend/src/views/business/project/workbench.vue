@@ -550,6 +550,70 @@ onMounted(() => {
           title="回函不符" :description="cfDetail.discrepancyReason || '回函与账面存在差异，请查看差异原因'" />
       </template>
     </el-drawer>
+
+    <!-- 函证编辑 -->
+    <el-dialog v-model="cfEditVisible" title="编辑函证" width="520px">
+      <el-form label-width="100px">
+        <el-form-item label="编号" required><el-input v-model="cfEditForm.confirmationNo" maxlength="50" /></el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="cfEditForm.type" style="width: 220px">
+            <el-option label="银行函证" value="银行函证" /><el-option label="往来款函证" value="往来款函证" /><el-option label="其他" value="其他" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="方式">
+          <el-select v-model="cfEditForm.confirmationMethod" clearable style="width: 220px">
+            <el-option label="邮寄" value="邮寄" /><el-option label="电子" value="电子" /><el-option label="跟函" value="跟函" /><el-option label="其他" value="其他" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="单位" required><el-input v-model="cfEditForm.targetUnit" maxlength="200" /></el-form-item>
+        <el-form-item label="内容" required><el-input v-model="cfEditForm.summary" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="发出快递"><el-input v-model="cfEditForm.sendTrackingNo" maxlength="50" /></el-form-item>
+        <el-form-item label="回函快递"><el-input v-model="cfEditForm.replyTrackingNo" maxlength="50" /></el-form-item>
+        <el-form-item label="差异原因"><el-input v-model="cfEditForm.discrepancyReason" type="textarea" :rows="2" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="cfEditVisible = false">取消</el-button>
+        <el-button type="primary" :loading="cfEditSaving" @click="handleCfEditSave">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 发票编辑 -->
+    <el-dialog v-model="invEditVisible" title="编辑发票" width="520px">
+      <el-form label-width="100px">
+        <el-form-item label="发票号"><el-input v-model="invEditForm.invoiceNo" maxlength="50" /></el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="invEditForm.type" style="width: 220px">
+            <el-option label="增值税专用发票" value="增值税专用发票" /><el-option label="增值税普通发票" value="增值税普通发票" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="价税合计" required>
+          <el-input-number v-model="invEditForm.amount" :min="0" :precision="2" :controls="false" style="width: 220px" />
+        </el-form-item>
+        <el-form-item label="税率（%）">
+          <el-select v-model="invEditForm.taxRate" clearable allow-create filterable style="width: 220px" @change="onInvEditTaxChange">
+            <el-option v-for="r in [13, 9, 6, 3, 1.5, 0]" :key="r" :label="r + '%'" :value="r" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="不含税">
+          <el-input-number v-model="invEditForm.amountExTax" :min="0" :precision="2" :controls="false" style="width: 220px" @change="onInvEditExTaxChange" />
+        </el-form-item>
+        <el-form-item label="税额">
+          <el-input-number v-model="invEditForm.taxAmount" :min="0" :precision="2" :controls="false" style="width: 220px" />
+        </el-form-item>
+        <el-form-item label="开票日期">
+          <el-date-picker v-model="invEditForm.invoiceDate" type="date" value-format="YYYY-MM-DD" style="width: 220px" />
+        </el-form-item>
+        <el-form-item label="发票品名"><el-input v-model="invEditForm.invoiceItem" maxlength="100" /></el-form-item>
+        <el-form-item label="垫付">
+          <el-checkbox v-model="invEditForm.isRecharge">向客户收取的代垫费用</el-checkbox>
+        </el-form-item>
+        <el-form-item label="备注"><el-input v-model="invEditForm.remark" type="textarea" :rows="2" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="invEditVisible = false">取消</el-button>
+        <el-button type="primary" :loading="invEditSaving" @click="handleInvEditSave">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
