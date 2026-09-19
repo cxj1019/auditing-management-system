@@ -1,5 +1,6 @@
 package com.accounting.firm.vendor.entity;
 
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -84,6 +85,10 @@ public class VendorPayment implements Serializable {
     private String updateBy;
 
     private LocalDateTime updateTime;
+
+    /** 软删除标记 */
+    @TableLogic
+    private Integer deleted;
 
     /** 非数据库字段：项目名称 */
     @TableField(exist = false)

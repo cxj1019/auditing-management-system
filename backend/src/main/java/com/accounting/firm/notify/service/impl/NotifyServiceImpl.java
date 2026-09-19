@@ -116,6 +116,46 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
     }
 
     /** 每日 08:00 自动扫描（亦可通过接口手动触发） */
+    /** 每周一北京时间 08:10（UTC 周日 00:10）：应收逾期 ≥30 天的发票汇总提醒经理及以上 */
+    @Scheduled(cron = "0 10 0 * * MON")
+    public void overdueWeeklyReminders() {
+        try {
+            var now = java.time.LocalDate.now();
+            var invoices = invoiceMapper.selectList(new LambdaQueryWrapper<com.accounting.firm.invoice.entity.Invoice>()
+                    .eq(com.accounting.firm.invoice.entity.Invoice::getStatus, 1));
+            // 已核销金额按发票聚合
+            Map<Long, java.math.BigDecimal> collectedByInvoice = new java.util.LinkedHashMap<>();
+            for (var p : paymentMapper.selectList(null)) {
+                if (p.getInvoiceId() != null) {
+                    collectedByInvoice.merge(p.getInvoiceId(), p.getAmount() == null ? java.math.BigDecimal.ZERO : p.getAmount(),
+                            java.math.BigDecimal::add);
+                }
+            }
+            int over30 = 0;
+            int over60 = 0;
+            for (var inv : invoices) {
+                if (inv.getInvoiceDate() == null) continue;
+                long days = java.time.temporal.ChronoUnit.DAYS.between(inv.getInvoiceDate(), now);
+                java.math.BigDecimal collected = collectedByInvoice.getOrDefault(inv.getId(), java.math.BigDecimal.ZERO);
+                java.math.BigDecimal balance = (inv.getAmount() == null ? java.math.BigDecimal.ZERO : inv.getAmount()).subtract(collected);
+                if (balance.signum() <= 0) continue;
+                if (days >= 60) over60++;
+                else if (days >= 30) over30++;
+            }
+            if (over30 + over60 == 0) return;
+            String content = "应收逾期提醒：逾期 30-60 天 %d 张，超 60 天 %d 张，请跟进回款".formatted(over30, over60);
+            java.util.Set<Long> toNotify = new java.util.HashSet<>(userIdsWithRole("admin"));
+            toNotify.addAll(userIdsWithRole("manager"));
+            toNotify.addAll(userIdsWithRole("partner"));
+            toNotify.addAll(userIdsWithRole("finance"));
+            for (Long uid : toNotify) {
+                push(uid, "receivable", null, "/business/invoice", "应收账龄预警", content);
+            }
+        } catch (Exception e) {
+            log.warn("应收账龄周预警失败: {}", e.getMessage());
+        }
+    }
+
     @Scheduled(cron = "${notify.cron:0 0 8 * * ?}")
     @Override
     public int generateDailyReminders() {

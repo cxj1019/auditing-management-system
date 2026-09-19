@@ -1,5 +1,6 @@
 package com.accounting.firm.reimbursement.entity;
 
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -80,4 +81,8 @@ public class Reimbursement implements Serializable {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+
+    /** 软删除标记：0-正常 1-已删除（回收站） */
+    @TableLogic
+    private Integer deleted;
 }

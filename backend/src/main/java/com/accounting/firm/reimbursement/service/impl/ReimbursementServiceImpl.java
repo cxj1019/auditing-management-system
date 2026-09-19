@@ -82,6 +82,29 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
     }
 
     @Override
+    public List<Reimbursement> recycleList(SecurityUser currentUser) {
+        List<Reimbursement> rows = baseMapper.selectDeleted();
+        boolean seeAll = currentUser.hasRole("admin") || currentUser.hasRole("finance")
+                || dataScopeService.roleLevel(currentUser.getUserId()) >= 2;
+        if (seeAll) return rows;
+        return rows.stream().filter(b -> isApplicant(b, currentUser)).toList();
+    }
+
+    @Override
+    public void restore(Long id, SecurityUser currentUser) {
+        Reimbursement bill = getById(id);
+        if (bill == null || bill.getDeleted() == null || bill.getDeleted() != 1) {
+            throw new BusinessException("报销单不在回收站中");
+        }
+        boolean seeAll = currentUser.hasRole("admin") || currentUser.hasRole("finance")
+                || dataScopeService.roleLevel(currentUser.getUserId()) >= 2;
+        if (!seeAll && !isApplicant(bill, currentUser)) {
+            throw new BusinessException("仅本人或管理员可恢复");
+        }
+        baseMapper.restoreById(id);
+    }
+
+    @Override
     public void checkVisible(Long reimbursementId, SecurityUser currentUser) {
         Reimbursement bill = getById(reimbursementId);
         if (bill == null) {

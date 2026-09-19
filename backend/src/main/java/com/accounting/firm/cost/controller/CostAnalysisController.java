@@ -69,6 +69,7 @@ public class CostAnalysisController {
     }
 
     /** 近 12 个月经营趋势 */
+    @PreAuthorize("hasAuthority('business:cost:list')")
     @GetMapping("/monthly-trend")
     public ApiResult<List<java.util.Map<String, Object>>> monthlyTrend() {
         return ApiResult.success(costAnalysisService.monthlyTrend());

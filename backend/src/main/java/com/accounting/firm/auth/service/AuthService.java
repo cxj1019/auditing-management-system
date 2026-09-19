@@ -35,19 +35,23 @@ public class AuthService {
     private final SysMenuService sysMenuService;
     private final SysUserMapper sysUserMapper;
     private final PasswordEncoder passwordEncoder;
+    private final LoginLockService loginLockService;
 
     /**
      * 登录：校验账号密码，签发 JWT，返回用户信息与菜单权限
      */
     public LoginResponse login(LoginRequest request) {
+        loginLockService.checkLocked(request.getUsername());
         Authentication authentication;
         try {
             authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
         } catch (Exception e) {
-            // 统一提示，不区分账号是否存在
+            // 统一提示，不区分账号是否存在；同时累计失败次数
+            loginLockService.recordFail(request.getUsername());
             throw new BusinessException(ResultCode.UNAUTHORIZED, "用户名或密码错误");
         }
+        loginLockService.clear(request.getUsername());
         SecurityUser user = (SecurityUser) authentication.getPrincipal();
         String token = jwtUtils.generateToken(user.getUserId(), user.getUsername());
 
@@ -76,6 +80,10 @@ public class AuthService {
         }
         if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
             throw new BusinessException("原密码不正确");
+        }
+        if (newPassword == null || newPassword.length() < 8
+                || !newPassword.matches(".*[A-Za-z].*") || !newPassword.matches(".*[0-9].*")) {
+            throw new BusinessException("新密码至少 8 位，且需同时包含字母和数字");
         }
         SysUser patch = new SysUser();
         patch.setId(userId);

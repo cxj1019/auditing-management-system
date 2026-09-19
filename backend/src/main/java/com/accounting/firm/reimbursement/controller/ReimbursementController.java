@@ -58,6 +58,22 @@ public class ReimbursementController {
         return ApiResult.success(reimbursementService.pageReimbursements(current, size, status, keyword, currentUser));
     }
 
+    /** 回收站：已软删除的报销单 */
+    @PreAuthorize("hasAuthority('business:reimbursement:list')")
+    @GetMapping("/recycle")
+    public ApiResult<List<Reimbursement>> recycle(@AuthenticationPrincipal SecurityUser currentUser) {
+        return ApiResult.success(reimbursementService.recycleList(currentUser));
+    }
+
+    /** 从回收站恢复 */
+    @PreAuthorize("hasAuthority('business:reimbursement:list')")
+    @PutMapping("/recycle/{id}/restore")
+    public ApiResult<Void> restore(@PathVariable Long id,
+                                   @AuthenticationPrincipal SecurityUser currentUser) {
+        reimbursementService.restore(id, currentUser);
+        return ApiResult.success();
+    }
+
     /** 报销单明细行清单 */
     @PreAuthorize("hasAuthority('business:reimbursement:list')")
     @GetMapping("/{id}/items")

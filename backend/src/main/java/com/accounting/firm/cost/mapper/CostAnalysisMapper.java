@@ -35,7 +35,7 @@ public interface CostAnalysisMapper {
                        GROUP BY c.project_id) rev ON rev.project_id = p.id
             LEFT JOIN (SELECT project_id, SUM(COALESCE(amount_ex_tax, amount)) AS expense
                        FROM vendor_payment
-                       WHERE status IN (2, 4) AND project_id IS NOT NULL
+                       WHERE deleted = 0 AND status IN (2, 4) AND project_id IS NOT NULL
                        GROUP BY project_id) vp ON vp.project_id = p.id
             LEFT JOIN (SELECT COALESCE(i.project_id, r.project_id) AS project_id,
                               SUM(CASE WHEN i.invoice_type = 'vat_special' AND i.tax_rate IS NOT NULL
@@ -43,7 +43,7 @@ public interface CostAnalysisMapper {
                                        ELSE i.amount END) AS expense
                        FROM reimbursement_item i
                        JOIN reimbursement r ON r.id = i.reimbursement_id
-                       WHERE r.status IN (2, 4) AND COALESCE(i.project_id, r.project_id) IS NOT NULL
+                       WHERE r.deleted = 0 AND r.status IN (2, 4) AND COALESCE(i.project_id, r.project_id) IS NOT NULL
                        GROUP BY COALESCE(i.project_id, r.project_id)) exp ON exp.project_id = p.id
             LEFT JOIN (SELECT project_id, SUM(amount) AS labor
                        FROM labor_cost GROUP BY project_id) l ON l.project_id = p.id
@@ -114,7 +114,7 @@ public interface CostAnalysisMapper {
                                        ELSE i.amount END) AS amount
                        FROM reimbursement_item i
                        JOIN reimbursement r ON r.id = i.reimbursement_id
-                       WHERE r.status IN (2, 4)
+                       WHERE r.deleted = 0 AND r.status IN (2, 4)
                        GROUP BY 1) exp ON exp.ym = m.ym
             LEFT JOIN (SELECT to_char(payment_date, 'YYYY-MM') AS ym,
                               SUM(COALESCE(amount_ex_tax, amount)) AS amount

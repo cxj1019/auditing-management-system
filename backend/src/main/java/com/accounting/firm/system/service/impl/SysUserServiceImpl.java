@@ -93,7 +93,11 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         }
         SysUser user = new SysUser();
         user.setUsername(email);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        String pwd = request.getPassword();
+        if (pwd == null || pwd.length() < 8 || !pwd.matches(".*[A-Za-z].*") || !pwd.matches(".*[0-9].*")) {
+            throw new BusinessException("初始密码至少 8 位，且需同时包含字母和数字");
+        }
+        user.setPassword(passwordEncoder.encode(pwd));
         user.setNickname(request.getNickname());
         user.setEmail(email);
         user.setPhone(request.getPhone());

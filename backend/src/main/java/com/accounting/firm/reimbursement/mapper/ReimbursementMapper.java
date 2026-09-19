@@ -5,6 +5,7 @@ import com.accounting.firm.reimbursement.entity.Reimbursement;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -31,12 +32,23 @@ public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
             JOIN reimbursement_item i ON i.reimbursement_id = r.id
             LEFT JOIN project p ON p.id = COALESCE(i.project_id, r.project_id)
             <where>
+                r.deleted = 0
                 <if test="startDate != null">AND i.expense_date &gt;= #{startDate}</if>
                 <if test="endDate != null">AND i.expense_date &lt;= #{endDate}</if>
             </where>
             ORDER BY i.expense_date DESC, r.id DESC
             </script>
             """)
+    /** 回收站：已软删除的报销单（绕过 @TableLogic） */
+    @Select("""
+            SELECT * FROM reimbursement WHERE deleted = 1
+            ORDER BY update_time DESC
+            """)
+    List<Reimbursement> selectDeleted();
+
+    @Update("UPDATE reimbursement SET deleted = 0 WHERE id = #{id}")
+    int restoreById(@Param("id") Long id);
+
     List<ReimbursementExportVO> selectExportItems(@Param("startDate") LocalDate startDate,
                                                   @Param("endDate") LocalDate endDate);
 }

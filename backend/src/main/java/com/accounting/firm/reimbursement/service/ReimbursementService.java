@@ -22,6 +22,12 @@ public interface ReimbursementService extends IService<Reimbursement> {
     /** 查询报销单明细行清单（校验当前用户可见性） */
     List<ReimbursementItem> listItems(Long reimbursementId, SecurityUser currentUser);
 
+    /** 回收站：已软删除的报销单（管理员/财务全量，其他人仅本人） */
+    List<Reimbursement> recycleList(SecurityUser currentUser);
+
+    /** 从回收站恢复 */
+    void restore(Long id, SecurityUser currentUser);
+
     /** 校验当前用户对该报销单的可见性（附件等子资源入口用），不可见抛异常 */
     void checkVisible(Long reimbursementId, SecurityUser currentUser);
 

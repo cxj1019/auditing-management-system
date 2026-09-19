@@ -88,15 +88,23 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
     }
 
     private void fillNames(List<VendorPayment> records) {
+        List<Long> projectIds = records.stream()
+                .map(VendorPayment::getProjectId).filter(java.util.Objects::nonNull).distinct().toList();
+        Map<Long, String> projectNames = projectIds.isEmpty() ? Map.of()
+                : projectMapper.selectBatchIds(projectIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                com.accounting.firm.project.entity.Project::getId,
+                                com.accounting.firm.project.entity.Project::getName));
+        List<Long> contractIds = records.stream()
+                .map(VendorPayment::getContractId).filter(java.util.Objects::nonNull).distinct().toList();
+        Map<Long, String> contractNos = contractIds.isEmpty() ? Map.of()
+                : contractMapper.selectBatchIds(contractIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                com.accounting.firm.contract.entity.Contract::getId,
+                                com.accounting.firm.contract.entity.Contract::getContractNo));
         for (VendorPayment v : records) {
-            if (v.getProjectId() != null) {
-                var pj = v.getProjectId() == null ? null : projectMapper.selectById(v.getProjectId());
-                v.setProjectName(pj == null ? null : pj.getName());
-            }
-            if (v.getContractId() != null) {
-                var ct = contractMapper.selectById(v.getContractId());
-                v.setContractNo(ct == null ? null : ct.getContractNo());
-            }
+            if (v.getProjectId() != null) v.setProjectName(projectNames.get(v.getProjectId()));
+            if (v.getContractId() != null) v.setContractNo(contractNos.get(v.getContractId()));
         }
     }
 
