@@ -22,6 +22,12 @@ const moduleRoutes: RouteRecordRaw[] = [
     meta: { title: '业务管理', icon: 'Briefcase' },
     children: [
       {
+        path: 'project-workbench/:id',
+        name: 'ProjectWorkbench',
+        component: () => import('@/views/business/project/workbench.vue'),
+        meta: { title: '项目工作台', perm: 'business:project:list' },
+      },
+      {
         path: 'project',
         name: 'BusinessProject',
         component: () => import('@/views/business/project/index.vue'),

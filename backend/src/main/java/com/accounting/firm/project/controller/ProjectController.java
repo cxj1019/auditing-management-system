@@ -52,6 +52,13 @@ public class ProjectController {
         return ApiResult.success(projectService.pageProjects(current, size, status, type, keyword, startDate, endDate, hasReport));
     }
 
+    /** 项目工作台一览 */
+    @PreAuthorize("hasAuthority('business:project:list')")
+    @GetMapping("/{id}/workbench")
+    public ApiResult<com.accounting.firm.project.dto.ProjectWorkbenchVO> workbench(@PathVariable Long id) {
+        return ApiResult.success(projectService.workbench(id));
+    }
+
     /** 项目预算明细（级别×人数×每人工时） */
     @PreAuthorize("hasAuthority('business:project:list')")
     @GetMapping("/{id}/budget")

@@ -41,14 +41,41 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
     private final ClientMapper clientMapper;
     private final ProjectBudgetMapper projectBudgetMapper;
     private final com.accounting.firm.system.mapper.StaffLevelMapper staffLevelMapper;
+    private final com.accounting.firm.invoice.mapper.InvoiceMapper invoiceMapper;
+    private final com.accounting.firm.collection.mapper.ContractPaymentMapper contractPaymentMapper;
+    private final com.accounting.firm.confirmation.mapper.ConfirmationMapper confirmationMapper;
+    private final com.accounting.firm.reimbursement.mapper.ReimbursementMapper reimbursementMapper;
+    private final com.accounting.firm.reimbursement.mapper.ReimbursementItemMapper reimbursementItemMapper;
+    private final com.accounting.firm.vendor.mapper.VendorPaymentMapper vendorPaymentMapper;
+    private final com.accounting.firm.cost.mapper.CostAnalysisMapper costAnalysisMapper;
+    private final com.accounting.firm.schedule.mapper.ScheduleMapper scheduleMapper;
+    private final com.accounting.firm.system.mapper.SysUserMapper sysUserMapper;
 
     public ProjectServiceImpl(@Lazy ContractMapper contractMapper, DataScopeService dataScopeService, ClientMapper clientMapper,
-                              ProjectBudgetMapper projectBudgetMapper, com.accounting.firm.system.mapper.StaffLevelMapper staffLevelMapper) {
+                              ProjectBudgetMapper projectBudgetMapper, com.accounting.firm.system.mapper.StaffLevelMapper staffLevelMapper,
+                              com.accounting.firm.invoice.mapper.InvoiceMapper invoiceMapper,
+                              com.accounting.firm.collection.mapper.ContractPaymentMapper contractPaymentMapper,
+                              com.accounting.firm.confirmation.mapper.ConfirmationMapper confirmationMapper,
+                              com.accounting.firm.reimbursement.mapper.ReimbursementMapper reimbursementMapper,
+                              com.accounting.firm.reimbursement.mapper.ReimbursementItemMapper reimbursementItemMapper,
+                              com.accounting.firm.vendor.mapper.VendorPaymentMapper vendorPaymentMapper,
+                              com.accounting.firm.cost.mapper.CostAnalysisMapper costAnalysisMapper,
+                              com.accounting.firm.schedule.mapper.ScheduleMapper scheduleMapper,
+                              com.accounting.firm.system.mapper.SysUserMapper sysUserMapper) {
         this.contractMapper = contractMapper;
         this.dataScopeService = dataScopeService;
         this.clientMapper = clientMapper;
         this.projectBudgetMapper = projectBudgetMapper;
         this.staffLevelMapper = staffLevelMapper;
+        this.invoiceMapper = invoiceMapper;
+        this.contractPaymentMapper = contractPaymentMapper;
+        this.confirmationMapper = confirmationMapper;
+        this.reimbursementMapper = reimbursementMapper;
+        this.reimbursementItemMapper = reimbursementItemMapper;
+        this.vendorPaymentMapper = vendorPaymentMapper;
+        this.costAnalysisMapper = costAnalysisMapper;
+        this.scheduleMapper = scheduleMapper;
+        this.sysUserMapper = sysUserMapper;
     }
 
     @Override
@@ -258,6 +285,212 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         project.setStartDate(request.getStartDate());
         project.setEndDate(request.getEndDate());
         project.setRemark(request.getRemark());
+    }
+
+    @Override
+    public com.accounting.firm.project.dto.ProjectWorkbenchVO workbench(Long projectId) {
+        Project project = getById(projectId);
+        if (project == null) {
+            throw new BusinessException("项目不存在");
+        }
+        com.accounting.firm.project.dto.ProjectWorkbenchVO vo = new com.accounting.firm.project.dto.ProjectWorkbenchVO();
+        vo.setProjectId(project.getId());
+        vo.setProjectNo(project.getProjectNo());
+        vo.setProjectName(project.getName());
+        vo.setStatus(project.getStatus());
+        vo.setStatusLabel(com.accounting.firm.project.entity.ProjectStatus.of(project.getStatus()).name());
+        vo.setPartnerName(project.getPartnerName());
+        vo.setManagerName(project.getManagerName());
+        vo.setSiteLeaderName(project.getSiteLeaderName());
+        vo.setStartDate(project.getStartDate());
+        vo.setEndDate(project.getEndDate());
+        vo.setBudgetHours(project.getBudgetHours());
+        if (project.getClientId() != null) {
+            com.accounting.firm.client.entity.Client client = clientMapper.selectById(project.getClientId());
+            vo.setClientName(client == null ? null : client.getClientName());
+        }
+
+        // 合同（金额合计）
+        java.util.List<com.accounting.firm.contract.entity.Contract> contracts = contractMapper.selectList(
+                new LambdaQueryWrapper<com.accounting.firm.contract.entity.Contract>()
+                        .eq(com.accounting.firm.contract.entity.Contract::getProjectId, projectId));
+        java.math.BigDecimal contractAmount = java.math.BigDecimal.ZERO;
+        java.util.List<Long> contractIds = new java.util.ArrayList<>();
+        for (var ct : contracts) {
+            contractIds.add(ct.getId());
+            contractAmount = contractAmount.add(ct.getAmount() == null ? java.math.BigDecimal.ZERO : ct.getAmount());
+        }
+        vo.setContractAmount(contractAmount);
+
+        // 收款（实际回款，按发票/合同税率价税分离）
+        java.math.BigDecimal collected = java.math.BigDecimal.ZERO;
+        java.util.List<java.util.Map<String, Object>> paymentRows = new java.util.ArrayList<>();
+        if (!contractIds.isEmpty()) {
+            var payments = contractPaymentMapper.selectList(
+                    new LambdaQueryWrapper<com.accounting.firm.collection.entity.ContractPayment>()
+                            .in(com.accounting.firm.collection.entity.ContractPayment::getContractId, contractIds)
+                            .orderByDesc(com.accounting.firm.collection.entity.ContractPayment::getPaymentDate));
+            Map<Long, java.math.BigDecimal> invoiceRates = new java.util.LinkedHashMap<>();
+            for (var p : payments) {
+                java.math.BigDecimal rate = null;
+                if (p.getInvoiceId() != null) {
+                    var inv = invoiceMapper.selectById(p.getInvoiceId());
+                    if (inv != null && inv.getTaxRate() != null) rate = inv.getTaxRate();
+                }
+                if (rate == null) {
+                    var ct = contracts.stream().filter(x -> x.getId().equals(p.getContractId())).findFirst().orElse(null);
+                    if (ct != null) rate = ct.getTaxRate();
+                }
+                java.math.BigDecimal amount = p.getAmount() == null ? java.math.BigDecimal.ZERO : p.getAmount();
+                java.math.BigDecimal ex = rate == null ? amount
+                        : amount.divide(java.math.BigDecimal.ONE.add(rate.divide(java.math.BigDecimal.valueOf(100), 6, java.math.RoundingMode.HALF_UP)), 2, java.math.RoundingMode.HALF_UP);
+                collected = collected.add(ex);
+                java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+                row.put("id", p.getId());
+                row.put("amount", amount);
+                row.put("amountExTax", ex);
+                row.put("paymentDate", p.getPaymentDate());
+                row.put("paymentMethod", p.getPaymentMethod());
+                row.put("invoiceId", p.getInvoiceId());
+                paymentRows.add(row);
+            }
+        }
+        vo.setTotalCollected(collected);
+        vo.setPayments(paymentRows);
+
+        // 发票（该项目合同下的全部发票）
+        java.util.List<com.accounting.firm.invoice.entity.Invoice> invoices = contractIds.isEmpty()
+                ? java.util.List.of()
+                : invoiceMapper.selectList(new LambdaQueryWrapper<com.accounting.firm.invoice.entity.Invoice>()
+                        .in(com.accounting.firm.invoice.entity.Invoice::getContractId, contractIds)
+                        .orderByDesc(com.accounting.firm.invoice.entity.Invoice::getId));
+        vo.setInvoices(invoices);
+
+        // 函证
+        vo.setConfirmations(confirmationMapper.selectList(
+                new LambdaQueryWrapper<com.accounting.firm.confirmation.entity.Confirmation>()
+                        .eq(com.accounting.firm.confirmation.entity.Confirmation::getProjectId, projectId)
+                        .orderByDesc(com.accounting.firm.confirmation.entity.Confirmation::getId)));
+
+        // 已批准报销明细（行级归集到本项目，不含税）
+        java.util.List<java.util.Map<String, Object>> reimbRows = new java.util.ArrayList<>();
+        var reimbItems = reimbursementItemMapper.selectList(
+                new LambdaQueryWrapper<com.accounting.firm.reimbursement.entity.ReimbursementItem>()
+                        .eq(com.accounting.firm.reimbursement.entity.ReimbursementItem::getProjectId, projectId));
+        if (!reimbItems.isEmpty()) {
+            java.util.List<Long> billIds = reimbItems.stream()
+                    .map(com.accounting.firm.reimbursement.entity.ReimbursementItem::getReimbursementId)
+                    .distinct().toList();
+            var bills = reimbursementMapper.selectBatchIds(billIds).stream()
+                    .filter(b -> b.getStatus() != null && (b.getStatus() == 2 || b.getStatus() == 4))
+                    .collect(java.util.stream.Collectors.toMap(
+                            com.accounting.firm.reimbursement.entity.Reimbursement::getId,
+                            b -> b));
+            for (var item : reimbItems) {
+                var bill = bills.get(item.getReimbursementId());
+                if (bill == null) continue;
+                java.math.BigDecimal ex;
+                if ("vat_special".equals(item.getInvoiceType()) && item.getTaxRate() != null) {
+                    java.math.BigDecimal amount = item.getAmount() == null ? java.math.BigDecimal.ZERO : item.getAmount();
+                    ex = amount.subtract(item.getTaxAmount() != null
+                            ? item.getTaxAmount()
+                            : amount.multiply(item.getTaxRate()).divide(java.math.BigDecimal.valueOf(100 + item.getTaxRate().doubleValue()), 2, java.math.RoundingMode.HALF_UP));
+                } else {
+                    ex = item.getAmount() == null ? java.math.BigDecimal.ZERO : item.getAmount();
+                }
+                java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+                row.put("reimbursementNo", bill.getReimbursementNo());
+                row.put("applicantName", bill.getApplicantName());
+                row.put("category", item.getCategory());
+                row.put("amountExTax", ex);
+                row.put("expenseDate", item.getExpenseDate());
+                row.put("description", item.getDescription());
+                reimbRows.add(row);
+            }
+        }
+        vo.setReimbursements(reimbRows);
+
+        // 对公付款（已批准/已付款，不含税）
+        java.util.List<java.util.Map<String, Object>> vpRows = new java.util.ArrayList<>();
+        var vendorPayments = vendorPaymentMapper.selectList(
+                new LambdaQueryWrapper<com.accounting.firm.vendor.entity.VendorPayment>()
+                        .eq(com.accounting.firm.vendor.entity.VendorPayment::getProjectId, projectId)
+                        .in(com.accounting.firm.vendor.entity.VendorPayment::getStatus, 2, 4)
+                        .orderByDesc(com.accounting.firm.vendor.entity.VendorPayment::getId));
+        java.math.BigDecimal vendorTotal = java.math.BigDecimal.ZERO;
+        for (var vp : vendorPayments) {
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("paymentNo", vp.getPaymentNo());
+            row.put("vendorName", vp.getVendorName());
+            row.put("summary", vp.getSummary());
+            row.put("amountExTax", vp.getAmountExTax() != null ? vp.getAmountExTax() : vp.getAmount());
+            row.put("paymentDate", vp.getPaymentDate());
+            row.put("status", vp.getStatus());
+            vpRows.add(row);
+            vendorTotal = vendorTotal.add(vp.getAmountExTax() != null ? vp.getAmountExTax() : nvl0(vp.getAmount()));
+        }
+        vo.setVendorPayments(vpRows);
+
+        // 费用成本 = 报销 + 对公付款
+        java.math.BigDecimal expenseCost = java.math.BigDecimal.ZERO;
+        for (var row : reimbRows) expenseCost = expenseCost.add((java.math.BigDecimal) row.get("amountExTax"));
+        vo.setExpenseCost(expenseCost.add(vendorTotal));
+
+        // 人工成本（自动 = 推算工时 × 级别单价；手工 labor_cost 登记）
+        java.util.List<com.accounting.firm.schedule.entity.Schedule> schedules = scheduleMapper.selectList(
+                new LambdaQueryWrapper<com.accounting.firm.schedule.entity.Schedule>()
+                        .eq(com.accounting.firm.schedule.entity.Schedule::getProjectId, projectId));
+        Map<Long, java.math.BigDecimal> levelRate = staffLevelMapper.selectList(null).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.accounting.firm.system.entity.StaffLevel::getId,
+                        l -> l.getHourlyRate() == null ? java.math.BigDecimal.ZERO : l.getHourlyRate(),
+                        (a, b) -> a));
+        Map<Long, Long> userLevel = new java.util.LinkedHashMap<>();
+        for (var u : sysUserMapper.selectList(null)) {
+            userLevel.put(u.getId(), u.getStaffLevelId());
+        }
+        java.util.Map<Long, java.math.BigDecimal> actualByLevel = new java.util.LinkedHashMap<>();
+        java.math.BigDecimal actualHours = java.math.BigDecimal.ZERO;
+        java.math.BigDecimal autoLabor = java.math.BigDecimal.ZERO;
+        for (var sc : schedules) {
+            java.math.BigDecimal h = com.accounting.firm.schedule.service.ScheduleHoursCalculator.effectiveHours(sc);
+            actualHours = actualHours.add(h);
+            Long lvl = userLevel.get(sc.getUserId());
+            if (lvl != null) {
+                actualByLevel.merge(lvl, h, java.math.BigDecimal::add);
+                java.math.BigDecimal rate = levelRate.getOrDefault(lvl, java.math.BigDecimal.ZERO);
+                autoLabor = autoLabor.add(h.multiply(rate));
+            }
+        }
+        vo.setActualHours(actualHours);
+        var manual = costAnalysisMapper.selectProjectProfit(null, null, null, null).stream()
+                .filter(r -> r.getProjectId().equals(projectId)).findFirst().map(r -> r.getLaborCost()).orElse(null);
+        vo.setAutoLaborCost(autoLabor);
+        vo.setLaborCost(nvl0(manual).add(autoLabor));
+
+        // 预算明细（含各级别实际工时）
+        java.util.List<java.util.Map<String, Object>> budgetLines = new java.util.ArrayList<>();
+        for (var line : projectBudgetMapper.selectList(
+                new LambdaQueryWrapper<com.accounting.firm.project.entity.ProjectBudget>()
+                        .eq(com.accounting.firm.project.entity.ProjectBudget::getProjectId, projectId))) {
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("levelName", staffLevelMapper.selectById(line.getStaffLevelId()) == null ? "未知级别"
+                    : staffLevelMapper.selectById(line.getStaffLevelId()).getName());
+            row.put("headcount", line.getHeadcount());
+            row.put("hoursPerPerson", line.getHoursPerPerson());
+            row.put("totalHours", java.math.BigDecimal.valueOf(line.getHeadcount()).multiply(line.getHoursPerPerson()));
+            row.put("actualHours", actualByLevel.getOrDefault(line.getStaffLevelId(), java.math.BigDecimal.ZERO));
+            budgetLines.add(row);
+        }
+        vo.setBudgetLines(budgetLines);
+
+        // 毛利
+        vo.setGrossProfit(collected.subtract(vo.getExpenseCost()).subtract(vo.getLaborCost()));
+        return vo;
+    }
+
+    private static java.math.BigDecimal nvl0(java.math.BigDecimal v) {
+        return v == null ? java.math.BigDecimal.ZERO : v;
     }
 
     @Override

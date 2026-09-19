@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pageProjects, createProject, updateProjectReport, updateProject, deleteProject, changeProjectStatus, listProjectMembers, addProjectMember, removeProjectMember, getProjectBudget, saveProjectBudget } from '@/api/project'
 import { getStaffLevels } from '@/api/cost'
@@ -156,6 +157,7 @@ const userOptions = ref<UserOption[]>([])
 const clientOptions = ref<ClientItem[]>([])
 const deptOptions = ref<DepartmentItem[]>([])
 const userStore = useUserStore()
+const router = useRouter()
 /** 部门名称映射（列表展示用） */
 const deptNameMap = computed(() => {
   const map: Record<number, string> = {}
@@ -413,7 +415,8 @@ async function handleRemoveMember(m: ProjectMemberItem): Promise<void> {
             <el-button v-permission="'business:project:edit'" link type="warning" size="small" @click="openReport(row)">报告</el-button>
             <el-button link type="info" size="small" @click="openMembers(row)">人员</el-button>
             <template v-if="row.status !== 2">
-              <el-button v-if="row.status === 0" v-permission="'business:project:edit'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button link type="primary" size="small" @click="router.push(`/business/project-workbench/${row.id}`)">工作台</el-button>
+            <el-button v-if="row.status === 0" v-permission="'business:project:edit'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
               <el-button v-if="row.status === 0" v-permission="'business:project:status'" link type="success" size="small" @click="handleTransit(row, 'finish')">完成</el-button>
               <el-button v-if="row.status === 1" v-permission="'business:project:status'" link type="primary" size="small" @click="handleTransit(row, 'reopen')">重开</el-button>
               <el-button v-if="row.status === 1" v-permission="'business:project:status'" link type="warning" size="small" @click="handleTransit(row, 'archive')">归档</el-button>
