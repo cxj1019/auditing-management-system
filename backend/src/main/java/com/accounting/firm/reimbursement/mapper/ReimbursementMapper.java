@@ -15,6 +15,17 @@ import java.util.List;
  */
 public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
 
+
+    /** 回收站：已软删除的报销单（绕过 @TableLogic） */
+    @Select("""
+            SELECT * FROM reimbursement WHERE deleted = 1
+            ORDER BY update_time DESC
+            """)
+    List<Reimbursement> selectDeleted();
+
+    @Update("UPDATE reimbursement SET deleted = 0 WHERE id = #{id}")
+    int restoreById(@Param("id") Long id);
+
     /** 导出费用明细扁平行（按明细费用日期范围筛选） */
     @Select("""
             <script>
@@ -39,15 +50,6 @@ public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
             ORDER BY i.expense_date DESC, r.id DESC
             </script>
             """)
-    /** 回收站：已软删除的报销单（绕过 @TableLogic） */
-    @Select("""
-            SELECT * FROM reimbursement WHERE deleted = 1
-            ORDER BY update_time DESC
-            """)
-    List<Reimbursement> selectDeleted();
-
-    @Update("UPDATE reimbursement SET deleted = 0 WHERE id = #{id}")
-    int restoreById(@Param("id") Long id);
 
     List<ReimbursementExportVO> selectExportItems(@Param("startDate") LocalDate startDate,
                                                   @Param("endDate") LocalDate endDate);
