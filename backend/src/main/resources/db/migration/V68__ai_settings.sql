@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS app_setting (
 );
 
 INSERT INTO sys_menu (id, parent_id, name, path, component, perm, icon, type, sort, visible)
-SELECT 205, 1, 'AI 设置', '/system/ai', 'system/ai/index', 'system:ai:list', 'MagicStick', 1, 70, b'0'
+SELECT 205, 1, 'AI 设置', '/system/ai', 'system/ai/index', 'system:ai:list', 'MagicStick', 1, 70, 0
 WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE id = 205);
 
 -- 仅管理员可见可用
