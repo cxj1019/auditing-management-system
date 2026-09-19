@@ -1,5 +1,6 @@
 import type { Router, RouteRecordRaw } from 'vue-router'
 import type { MenuItem } from '@/types'
+import { useUserStore } from '@/stores/user'
 
 /**
  * 业务模块路由注册
@@ -165,17 +166,19 @@ export function registerModuleRoutes(router: Router, userMenus: MenuItem[]): voi
   }
   registeredRouteNames = []
 
-  // 用户可访问的菜单路径集合
+  // 用户可访问的菜单路径集合 + 权限标识集合
   const allowedPaths = new Set<string>()
   collectPaths(userMenus, allowedPaths)
+  const userStore = useUserStore()
+  const userPerms = new Set<string>(userStore.permissions || [])
 
   for (const route of moduleRoutes) {
     const children = (route.children || []).filter((child) => {
       const fullPath = `${route.path}/${child.path}`.replace(/\/+/g, '/')
-      // 无 perm 要求或用户具备对应菜单权限才注册
       const perm = child.meta?.perm as string | undefined
       if (!perm) return true
-      return allowedPaths.has(fullPath)
+      // 有菜单路径的直接放行；无菜单路径的功能页（如项目工作台）按权限标识放行
+      return allowedPaths.has(fullPath) || userPerms.has(perm)
     })
     if (children.length > 0) {
       router.addRoute({ ...route, children })
