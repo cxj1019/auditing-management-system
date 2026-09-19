@@ -3,15 +3,19 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
 import type {
   ConfirmationAttachmentItem, ConfirmationItem, InvoiceItem, ProjectItem, PageResult,
 } from '@/types'
-import { listConfirmationAttachments, getConfirmationAttPreviewUrl, downloadConfirmationAttachment } from '@/api/confirmation'
+import { listConfirmationAttachments, getConfirmationAttPreviewUrl, downloadConfirmationAttachment, updateConfirmation } from '@/api/confirmation'
+import { updateInvoice as updateInvoiceApi } from '@/api/invoice'
+import type { ConfirmationRequest, InvoiceRequest } from '@/types'
 import AttachmentLink from '@/components/AttachmentLink.vue'
 
 /** 项目工作台：项目一览 + 直接开票 / 收款 / 处理函证 */
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 const projectId = Number(route.params.id)
 
 const loading = ref(false)
@@ -119,7 +123,7 @@ async function handleConfirmationItemSave(): Promise<void> {
   }
 }
 
-function openInvoiceItemIssue(inv: InvoiceItem): void {
+function openInvoiceIssue(inv: InvoiceItem): void {
   ElMessageBox.prompt(`为「${inv.invoiceNo || '待开票'}」填写/确认发票号后开票`, '开票', {
     inputValue: inv.invoiceNo || '',
   }).then(async ({ value }) => {
@@ -151,6 +155,142 @@ function openCfDetail(cf: ConfirmationItem): void {
 async function handleCfDownload(att: ConfirmationAttachmentItem): Promise<void> {
   if (!cfDetail.value) return
   await downloadConfirmationAttachment(cfDetail.value.id, att.id, att.fileName)
+}
+
+// ---------- 函证编辑 ----------
+const canEditCf = computed(() => {
+  // 与桌面端一致：有确认/编辑权限且未作废即可改
+  return userStore.hasPermission('business:confirmation:edit') && cfDetail.value?.status !== 3
+})
+const cfEditVisible = ref(false)
+const cfEditSaving = ref(false)
+const cfEditForm = reactive({
+  confirmationNo: '', type: '', confirmationMethod: '', targetUnit: '', summary: '',
+  sendTrackingNo: '', replyTrackingNo: '', discrepancyReason: '',
+})
+
+function openCfEdit(): void {
+  if (!cfDetail.value) return
+  Object.assign(cfEditForm, {
+    confirmationNo: cfDetail.value.confirmationNo || '',
+    type: cfDetail.value.type || '其他',
+    confirmationMethod: cfDetail.value.confirmationMethod || '',
+    targetUnit: cfDetail.value.targetUnit || '',
+    summary: cfDetail.value.summary || '',
+    sendTrackingNo: cfDetail.value.sendTrackingNo || '',
+    replyTrackingNo: cfDetail.value.replyTrackingNo || '',
+    discrepancyReason: cfDetail.value.discrepancyReason || '',
+  })
+  cfEditVisible.value = true
+}
+
+async function handleCfEditSave(): Promise<void> {
+  if (!cfDetail.value) return
+  if (!cfEditForm.confirmationNo.trim()) { ElMessage.warning('请填写函证编号'); return }
+  if (!cfEditForm.targetUnit.trim()) { ElMessage.warning('请填写被函证单位'); return }
+  cfEditSaving.value = true
+  try {
+    await updateConfirmation({
+      id: cfDetail.value.id,
+      confirmationNo: cfEditForm.confirmationNo,
+      type: cfEditForm.type,
+      confirmationMethod: cfEditForm.confirmationMethod,
+      targetUnit: cfEditForm.targetUnit,
+      summary: cfEditForm.summary,
+      projectId,
+      sendTrackingNo: cfEditForm.sendTrackingNo,
+      replyTrackingNo: cfEditForm.replyTrackingNo,
+      discrepancyReason: cfEditForm.discrepancyReason,
+    })
+    ElMessage.success('函证已更新')
+    cfEditVisible.value = false
+    cfDetailVisible.value = false
+    fetchWorkbench()
+  } finally {
+    cfEditSaving.value = false
+  }
+}
+
+// ---------- 发票编辑 ----------
+const canEditInv = computed(() =>
+  userStore.hasPermission('business:invoice:edit') && invoiceEditTarget.value?.status !== 2)
+const invEditVisible = ref(false)
+const invEditSaving = ref(false)
+const invoiceEditTarget = ref<InvoiceItem | null>(null)
+const invEditForm = reactive({
+  invoiceNo: '', type: '增值税专用发票', amount: 0, taxRate: undefined as number | undefined,
+  amountExTax: undefined as number | undefined, taxAmount: undefined as number | undefined,
+  invoiceDate: '', invoiceItem: '', isRecharge: false, remark: '',
+})
+
+function canEditInvRow(row: InvoiceItem): boolean {
+  return userStore.hasPermission('business:invoice:edit') && row.status !== 2
+}
+
+function openInvEdit(row: InvoiceItem): void {
+  invoiceEditTarget.value = row
+  Object.assign(invEditForm, {
+    invoiceNo: row.invoiceNo || '',
+    type: row.type,
+    amount: Number(row.amount),
+    taxRate: row.taxRate ?? undefined,
+    amountExTax: row.amountExTax != null ? Number(row.amountExTax) : undefined,
+    taxAmount: row.taxAmount != null ? Number(row.taxAmount) : undefined,
+    invoiceDate: row.invoiceDate || '',
+    invoiceItem: row.invoiceItem || '',
+    isRecharge: !!row.isRecharge,
+    remark: row.remark || '',
+  })
+  invEditVisible.value = true
+}
+
+function onInvEditTaxChange(): void {
+  const f = invEditForm
+  if (f.amount == null || f.amount <= 0) return
+  if (f.taxRate == null) { f.amountExTax = f.amount; f.taxAmount = 0; return }
+  const ex = Math.round((f.amount / (1 + f.taxRate / 100)) * 100) / 100
+  f.amountExTax = ex
+  f.taxAmount = Math.round((f.amount - ex) * 100) / 100
+}
+
+function onInvEditExTaxChange(): void {
+  const f = invEditForm
+  if (f.amountExTax == null || f.amountExTax <= 0) return
+  const tax = f.taxRate == null ? 0 : Math.round(f.amountExTax * f.taxRate) / 100
+  f.taxAmount = Math.round(tax * 100) / 100
+  f.amount = Math.round((f.amountExTax + tax) * 100) / 100
+}
+
+async function handleInvEditSave(): Promise<void> {
+  const target = invoiceEditTarget.value
+  if (!target) return
+  invEditSaving.value = true
+  try {
+    await updateInvoiceApi(target.id, {
+      id: target.id,
+      contractId: target.contractId,
+      invoiceNo: invEditForm.invoiceNo,
+      type: invEditForm.type,
+      amount: invEditForm.amount,
+      taxRate: invEditForm.taxRate,
+      amountExTax: invEditForm.amountExTax,
+      taxAmount: invEditForm.taxAmount,
+      invoiceDate: invEditForm.invoiceDate,
+      invoiceItem: invEditForm.invoiceItem,
+      isRecharge: invEditForm.isRecharge,
+      remark: invEditForm.remark,
+    })
+    ElMessage.success('发票已更新')
+    invEditVisible.value = false
+    fetchWorkbench()
+  } finally {
+    invEditSaving.value = false
+  }
+}
+
+/** 当前用户权限集合（供模板/逻辑使用） */
+function userPerms(): Set<string> {
+  return new Set(userStore.permissions || [])
 }
 
 onMounted(() => {
@@ -224,9 +364,10 @@ onMounted(() => {
             <el-table-column label="已收" width="100" align="right">
               <template #default="{ row }">{{ money(row.collectedAmount) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="80">
+            <el-table-column label="操作" width="120">
               <template #default="{ row }">
-                <el-button v-if="row.status === 0" v-permission="'business:invoice:status'" link type="success" size="small" @click="openInvoiceItemIssue(row)">开票</el-button>
+                <el-button v-if="row.status === 0" v-permission="'business:invoice:status'" link type="success" size="small" @click="openInvoiceIssue(row)">开票</el-button>
+                <el-button v-if="canEditInvRow(row)" link type="primary" size="small" @click="openInvEdit(row)">编辑</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -378,6 +519,9 @@ onMounted(() => {
           <el-descriptions-item label="差异原因" :span="2">{{ cfDetail.discrepancyReason || '—' }}</el-descriptions-item>
         </el-descriptions>
 
+        <div v-if="canEditCf" style="margin-top: 10px">
+          <el-button type="primary" size="small" @click="openCfEdit">编辑函证</el-button>
+        </div>
         <div class="items-header" style="margin-top: 14px">
           <span class="section-title">附件（{{ cfAtts.length }}）</span>
         </div>
