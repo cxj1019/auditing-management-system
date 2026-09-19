@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { pageProjects, createProject, updateProject } from '@/api/project'
 import { listBusinessTypes } from '@/api/businessType'
@@ -11,6 +12,7 @@ import type { BusinessTypeItem, ClientItem, DepartmentItem, ProjectItem, Project
 /** 手机端项目：列表 + 登记/编辑（编辑仅限进行中，与桌面一致） */
 const userStore = useUserStore()
 
+const router = useRouter()
 const statusLabels: Record<number, string> = { 0: '进行中', 1: '已完成', 2: '已归档' }
 const statusTypes: Record<number, 'primary' | 'success' | 'info'> = { 0: 'primary', 1: 'success', 2: 'info' }
 
@@ -50,6 +52,10 @@ async function fetchList(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+function openWorkbench(p: { id: number }): void {
+  router.push(`/m/projects/${p.id}`)
 }
 
 function switchStatus(v: number | undefined): void {
@@ -177,11 +183,11 @@ onMounted(fetchList)
     <div v-if="!loading && !records.length" class="mp-empty">没有找到项目</div>
 
     <div v-for="p in records" :key="p.id" class="mp-card">
-      <div class="mp-card-head" @click="expandedId = expandedId === p.id ? null : p.id">
+      <div class="mp-card-head" @click="openWorkbench(p)">
         <span class="mp-name">{{ p.name }}</span>
         <el-tag :type="statusTypes[p.status]" size="small">{{ statusLabels[p.status] }}</el-tag>
       </div>
-      <div class="mp-sub" @click="expandedId = expandedId === p.id ? null : p.id">
+      <div class="mp-sub" @click="openWorkbench(p)">
         {{ p.projectNo }} · {{ p.clientName || '—' }} · {{ p.type }}
       </div>
 
