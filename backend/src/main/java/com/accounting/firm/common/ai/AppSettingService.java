@@ -17,7 +17,7 @@ public class AppSettingService {
     public static final String KEY_API_KEY = "ai_api_key";
     public static final String KEY_MODEL = "ai_model";
 
-    private final AppSettingMapper appSettingMapper;
+    private final com.accounting.firm.common.ai.mapper.AppSettingMapper appSettingMapper;
 
     public String get(String key) {
         AppSetting setting = appSettingMapper.selectOne(new LambdaQueryWrapper<AppSetting>()

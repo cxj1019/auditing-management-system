@@ -1,5 +1,6 @@
-package com.accounting.firm.common.ai;
+package com.accounting.firm.common.ai.mapper;
 
+import com.accounting.firm.common.ai.AppSetting;
 import org.apache.ibatis.annotations.Mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
