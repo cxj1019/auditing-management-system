@@ -4,8 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/api/request'
 import type {
-  ConfirmationItem, InvoiceItem, ProjectItem, PageResult,
+  ConfirmationAttachmentItem, ConfirmationItem, InvoiceItem, ProjectItem, PageResult,
 } from '@/types'
+import { listConfirmationAttachments, getConfirmationAttPreviewUrl, downloadConfirmationAttachment } from '@/api/confirmation'
+import AttachmentLink from '@/components/AttachmentLink.vue'
 
 /** 项目工作台：项目一览 + 直接开票 / 收款 / 处理函证 */
 const route = useRoute()
@@ -131,6 +133,26 @@ function openInvoiceItemIssue(inv: InvoiceItem): void {
 
 const cfStatusLabels: Record<number, string> = { 0: '未发出', 1: '已发出', 2: '已回函', 3: '已作废' }
 
+// ---------- 函证详情（物流 + 附件） ----------
+const cfDetailVisible = ref(false)
+const cfDetail = ref<ConfirmationItem | null>(null)
+const cfAtts = ref<ConfirmationAttachmentItem[]>([])
+const cfAttLoading = ref(false)
+
+function openCfDetail(cf: ConfirmationItem): void {
+  cfDetail.value = cf
+  cfDetailVisible.value = true
+  cfAttLoading.value = true
+  listConfirmationAttachments(cf.id)
+    .then((rows) => { cfAtts.value = rows })
+    .finally(() => { cfAttLoading.value = false })
+}
+
+async function handleCfDownload(att: ConfirmationAttachmentItem): Promise<void> {
+  if (!cfDetail.value) return
+  await downloadConfirmationAttachment(cfDetail.value.id, att.id, att.fileName)
+}
+
 onMounted(() => {
   fetchWorkbench()
   fetchProject()
@@ -236,6 +258,11 @@ onMounted(() => {
               <template #default="{ row }">{{ cfStatusLabels[row.status] }}</template>
             </el-table-column>
             <el-table-column prop="sentDate" label="发出" width="100" />
+            <el-table-column label="操作" width="70">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openCfDetail(row)">详情</el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </el-card>
 
@@ -334,6 +361,51 @@ onMounted(() => {
         <el-button type="primary" :loading="confirmationSaving" @click="handleConfirmationItemSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 函证详情（物流 + 附件） -->
+    <el-drawer v-model="cfDetailVisible" :title="cfDetail ? `函证 ${cfDetail.confirmationNo}` : '函证详情'" size="520px">
+      <template v-if="cfDetail">
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="被函证单位" :span="2">{{ cfDetail.targetUnit }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{ cfDetail.type }}</el-descriptions-item>
+          <el-descriptions-item label="方式">{{ cfDetail.confirmationMethod || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ cfStatusLabels[cfDetail.status] }}</el-descriptions-item>
+          <el-descriptions-item label="函证内容" :span="2">{{ cfDetail.summary || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="发出日期">{{ cfDetail.sentDate || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="发出快递">{{ cfDetail.sendTrackingNo || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="回函日期">{{ cfDetail.confirmedDate || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="回函快递">{{ cfDetail.replyTrackingNo || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="差异原因" :span="2">{{ cfDetail.discrepancyReason || '—' }}</el-descriptions-item>
+        </el-descriptions>
+
+        <div class="items-header" style="margin-top: 14px">
+          <span class="section-title">附件（{{ cfAtts.length }}）</span>
+        </div>
+        <el-table v-loading="cfAttLoading" :data="cfAtts" border size="small">
+          <el-table-column label="文件名" min-width="220">
+            <template #default="{ row }">
+              <AttachmentLink
+                :file-name="row.fileName"
+                :content-type="row.contentType"
+                :fetch-signed-url="() => getConfirmationAttPreviewUrl(cfDetail!.id, row.id)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="大小" width="90">
+            <template #default="{ row }">{{ (row.fileSize / 1024).toFixed(1) }} KB</template>
+          </el-table-column>
+          <el-table-column label="操作" width="80">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="handleCfDownload(row)">下载</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-alert
+          v-if="cfDetail.replyMatched === false"
+          type="warning" :closable="false" show-icon style="margin-top: 10px"
+          title="回函不符" :description="cfDetail.discrepancyReason || '回函与账面存在差异，请查看差异原因'" />
+      </template>
+    </el-drawer>
   </div>
 </template>
 
