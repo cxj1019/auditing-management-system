@@ -5,6 +5,7 @@ import { listExpenseCategories, createExpenseCategory, updateExpenseCategory, de
 import type { ExpenseCategoryItem, ExpenseCategoryRequest } from '@/types'
 import { restoreQuery, saveQuery } from '@/utils/queryCache'
 import { useRoute } from 'vue-router'
+import request from '@/api/request'
 import * as XLSX from 'xlsx'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
@@ -584,6 +585,65 @@ async function handleDetailRowUpload(files: File[], itemId: number): Promise<voi
   }
 }
 
+// ---------- 批量审批（仅待审批单） ----------
+const selectedRows = ref<ReimbursementItem[]>([])
+const batchApproving = ref(false)
+
+function handleSelectionChange(rows: ReimbursementItem[]): void {
+  selectedRows.value = rows.filter((r) => r.status === 1)
+}
+
+async function handleBatchApprove(): Promise<void> {
+  if (!selectedRows.value.length) {
+    ElMessage.warning('请先勾选待审批的报销单')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`批量批准 ${selectedRows.value.length} 张报销单？`, '批量批准', { type: 'warning' })
+  } catch { return }
+  batchApproving.value = true
+  let ok = 0
+  try {
+    for (const row of selectedRows.value) {
+      try {
+        await approveReimbursement(row.id, { action: 'approve', comment: '批量批准' })
+        ok++
+      } catch { /* 单张失败继续 */ }
+    }
+    ElMessage.success(`已批准 ${ok}/${selectedRows.value.length} 张`)
+    fetchList()
+  } finally {
+    batchApproving.value = false
+  }
+}
+
+// ---------- 回收站 ----------
+const recycleVisible = ref(false)
+const recycleLoading = ref(false)
+const recycleRows = ref<ReimbursementItem[]>([])
+const restoring = ref(false)
+
+async function openRecycle(): Promise<void> {
+  recycleVisible.value = true
+  recycleLoading.value = true
+  try {
+    recycleRows.value = await request.get('/reimbursements/recycle') as unknown as ReimbursementItem[]
+  } finally {
+    recycleLoading.value = false
+  }
+}
+
+async function handleRestore(row: ReimbursementItem): Promise<void> {
+  restoring.value = true
+  try {
+    await request.put(`/reimbursements/recycle/${row.id}/restore`)
+    ElMessage.success('已恢复')
+    openRecycle()
+  } finally {
+    restoring.value = false
+  }
+}
+
 onMounted(() => {
   // 支持外部深链（如手机端跳转）：?keyword=BX2026... 直接带入搜索
   const kw = route.query.keyword
@@ -606,6 +666,8 @@ onMounted(() => {
           <el-input v-model="query.keyword" placeholder="申请人/标题" clearable style="width: 180px; margin-left: 8px" @keyup.enter="handleSearch" />
           <el-button type="primary" style="margin-left: 8px" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
+          <el-button v-permission="'business:reimbursement:approve'" :disabled="!selectedRows.length" :loading="batchApproving" style="margin-left: 8px" @click="handleBatchApprove">批量批准（{{ selectedRows.length }}）</el-button>
+          <el-button style="margin-left: 8px" @click="openRecycle">回收站</el-button>
         </div>
         <div>
           <el-date-picker v-model="exportRange" class="m-hide" type="daterange" value-format="YYYY-MM-DD" start-placeholder="导出开始" end-placeholder="导出结束" style="width: 260px; margin-right: 8px" />
@@ -615,7 +677,8 @@ onMounted(() => {
       </div>
 
       <!-- 报销单表格 -->
-      <el-table v-loading="loading" :data="records" border stripe>
+      <el-table v-loading="loading" :data="records" border stripe @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="42" :selectable="(row: ReimbursementItem) => row.status === 1" />
         <el-table-column v-if="!isMobile" prop="reimbursementNo" label="报销编号" min-width="140" />
         <el-table-column v-if="!isMobile" prop="applicantName" label="申请人" width="100" />
         <el-table-column prop="title" label="标题" min-width="170" show-overflow-tooltip />
@@ -1047,6 +1110,19 @@ onMounted(() => {
         <el-button type="primary" :loading="catSaving" @click="handleCatSave">确定</el-button>
       </template>
     </el-dialog>
+  <!-- 回收站 -->
+  <el-dialog v-model="recycleVisible" title="回收站（已删除的报销单）" width="640px">
+    <el-table v-loading="recycleLoading" :data="recycleRows" border size="small" max-height="420">
+      <el-table-column prop="reimbursementNo" label="报销编号" min-width="140" />
+      <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
+      <el-table-column prop="applicantName" label="申请人" width="100" />
+      <el-table-column label="操作" width="90">
+        <template #default="{ row }">
+          <el-button link type="primary" size="small" :loading="restoring" @click="handleRestore(row)">恢复</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+  </el-dialog>
   </div>
 </template>
 

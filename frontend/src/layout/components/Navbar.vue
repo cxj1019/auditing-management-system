@@ -6,6 +6,7 @@ import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { changePassword, logout } from '@/api/auth'
 import { getUnreadCount, listNotifications, markAllNotificationsRead, markNotificationRead } from '@/api/notification'
+import request from '@/api/request'
 import type { NotificationItem } from '@/types'
 
 const route = useRoute()
@@ -41,6 +42,41 @@ async function handleLogout(): Promise<void> {
   } catch {
     // 用户取消
   }
+}
+
+// ---------- 全局搜索 ----------
+const searchKeyword = ref('')
+const searchVisible = ref(false)
+const searchLoading = ref(false)
+interface SearchRow { type: string; typeLabel: string; id: number; no: string; name: string; path: string }
+const searchRows = ref<SearchRow[]>([])
+
+const typeRoute: Record<string, (id: number) => string> = {
+  client: () => '/business/client',
+  project: (id) => `/business/project-workbench/${id}`,
+  contract: () => '/business/contract',
+  reimbursement: () => '/business/reimbursement',
+}
+
+async function handleSearchRemote(): Promise<void> {
+  const kw = searchKeyword.value.trim()
+  if (!kw) { searchRows.value = []; return }
+  searchLoading.value = true
+  try {
+    const rows = await request.get('/search', { params: { keyword: kw } }) as unknown as SearchRow[]
+    searchRows.value = rows || []
+  } catch {
+    searchRows.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+function goSearchResult(row: SearchRow): void {
+  searchVisible.value = false
+  searchKeyword.value = ''
+  const to = typeRoute[row.type]
+  router.push(to ? to(row.id) : row.path)
 }
 
 // ---------- 站内通知 ----------
@@ -149,6 +185,33 @@ async function handleChangePassword(): Promise<void> {
         <Expand v-else />
       </el-icon>
       <span class="page-title">{{ pageTitle }}</span>
+      <el-popover v-model:visible="searchVisible" placement="bottom-start" :width="360" trigger="click">
+        <template #reference>
+          <el-input
+            v-model="searchKeyword"
+            size="small"
+            clearable
+            placeholder="搜索编号/名称"
+            style="width: 200px; margin-left: 8px"
+            :prefix-icon="'Search'"
+            @input="handleSearchRemote"
+          />
+        </template>
+        <div v-loading="searchLoading" style="max-height: 320px; overflow-y: auto">
+          <div
+            v-for="row in searchRows"
+            :key="row.type + row.id"
+            style="padding: 7px 6px; border-bottom: 1px solid #f3f4f6; cursor: pointer; font-size: 13px"
+            @click="goSearchResult(row)"
+          >
+            <el-tag size="small" style="margin-right: 6px">{{ row.typeLabel }}</el-tag>
+            {{ row.no }} {{ row.name }}
+          </div>
+          <div v-if="!searchRows.length && searchKeyword" style="text-align: center; color: #9ca3af; padding: 12px 0; font-size: 13px">
+            无匹配结果
+          </div>
+        </div>
+      </el-popover>
     </div>
 
     <div class="navbar-right">
@@ -361,6 +424,11 @@ async function handleChangePassword(): Promise<void> {
 
   .navbar {
     padding: 0 10px;
+  }
+
+  .navbar-left .el-popover--reference,
+  .navbar-left .el-input {
+    display: none;
   }
 
   .navbar-right {

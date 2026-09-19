@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CaptureUpload from '@/components/CaptureUpload.vue'
+import { jsPDF } from 'jspdf'
 import {
   pageVendorPayments, createVendorPayment, updateVendorPayment, submitVendorPayment,
   withdrawVendorPayment, deleteVendorPayment, approveVendorPayment, markVendorPaid,
@@ -315,6 +316,43 @@ const attLoading = ref(false)
 const attUploading = ref(false)
 const currentBillId = computed(() => detail.value?.id || 0)
 
+
+/** 付款申请单打印（PDF） */
+function printPayment(row: VendorPaymentItem): void {
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+    const money = Number(row.amount).toFixed(2)
+    doc.setFontSize(18)
+    doc.text('付款申请单', 105, 25, { align: 'center' })
+    doc.setFontSize(11)
+    const lines: [string, string][] = [
+      ['付款编号', row.paymentNo],
+      ['供应商', row.vendorName],
+      ['摘要', row.summary || '-'],
+      ['付款金额', money + ' 元'],
+      ['付款日期', row.paymentDate || '-'],
+      ['付款方式', row.paymentMethod || '-'],
+      ['供应商发票号', row.invoiceNo || '-'],
+      ['归集项目', row.projectName || '-'],
+      ['申请人', row.creatorName || '-'],
+      ['审批人', row.approverName || '-'],
+      ['审批意见', row.approveComment || '-'],
+      ['付款确认', row.paidBy || '-'],
+    ]
+    let y = 40
+    for (const [k, v] of lines) {
+      doc.text(k + ':', 25, y)
+      doc.text(String(v), 60, y)
+      y += 9
+    }
+    y += 10
+    doc.text('申请人签字：____________', 25, y)
+    doc.text('审批签字：____________', 105, y)
+    y += 12
+    doc.text('财务签字：____________', 25, y)
+    doc.text('出纳签字：____________', 105, y)
+    doc.save(`付款申请单_${row.paymentNo}.pdf`)
+}
+
 async function openDetail(row: VendorPaymentItem): Promise<void> {
   detail.value = row
   drawerVisible.value = true
@@ -409,6 +447,7 @@ onMounted(async () => {
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
+            <el-button link size="small" @click="printPayment(row)">打印</el-button>
             <template v-if="row.status === 0 || row.status === 3">
               <el-button v-if="canEdit" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
               <el-button v-if="canEdit" link type="success" size="small" @click="handleSubmit(row)">提交</el-button>

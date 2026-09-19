@@ -12,6 +12,7 @@ import {
   deleteLaborCost,
 } from '@/api/cost'
 import { getProjectHourDetails, getLaborRates, saveUserLevels, getStaffLevels, saveStaffLevels } from '@/api/cost'
+import { getMonthlyTrend } from '@/api/dashboard'
 import { useUserStore } from '@/stores/user'
 import { pageProjects } from '@/api/project'
 import type { CostOverview, ProjectHoursItem, ProjectItem, ProjectProfitItem } from '@/types'
@@ -25,6 +26,33 @@ const profitYear = ref<number | undefined>(undefined)
 
 // ---------- 经营概览 ----------
 const overview = ref<CostOverview | null>(null)
+
+interface MonthlyRow { ym: string; income: number; expense: number; labor: number }
+
+/** 月度经营报表导出：12 个月收入/成本/人工/毛利 + 全年合计 */
+async function exportMonthlyReport(): Promise<void> {
+      const y = profitYear.value || new Date().getFullYear()
+      const rows: MonthlyRow[] = ((await getMonthlyTrend()) as MonthlyRow[]).filter((m) => String(m.ym).startsWith(String(y)))
+      if (!rows.length) {
+        ElMessage.info(`${y} 年暂无月度数据`)
+        return
+      }
+      const header = ['月份', '收入（不含税，元）', '报销+对公成本（元）', '人工成本（元）', '当月毛利（元）']
+      const body: (string | number)[][] = rows.map((m) => [
+        m.ym,
+        Number(m.income || 0), Number(m.expense || 0), Number(m.labor || 0),
+        Math.round((Number(m.income || 0) - Number(m.expense || 0) - Number(m.labor || 0)) * 100) / 100,
+      ])
+      const t = (i: number) => Math.round(body.reduce((s: number, r) => s + Number(r[i] || 0), 0) * 100) / 100
+      body.push(['全年合计', t(1), t(2), t(3), Math.round((t(1) - t(2) - t(3)) * 100) / 100])
+
+      const ws = XLSX.utils.aoa_to_sheet([header, ...body])
+      ws['!cols'] = [{ wch: 10 }, { wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 16 }]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, '月度经营报表')
+      XLSX.writeFile(wb, `月度经营报表_${y}.xlsx`)
+      ElMessage.success('月度经营报表已导出')
+    }
 
 async function fetchOverview(): Promise<void> {
   overview.value = await getCostOverview()
@@ -179,6 +207,7 @@ onMounted(() => {
               <el-input v-model="profitKeyword" placeholder="项目编号/名称/客户" clearable style="width: 200px; margin-left: 8px" @keyup.enter="fetchProfit" />
               <el-button type="primary" style="margin-left: 8px" @click="fetchProfit">查询</el-button>
               <el-button v-if="canEditRates" style="margin-left: 8px" @click="openRates">工时单价</el-button>
+              <el-button style="margin-left: 8px" @click="exportMonthlyReport">月度经营报表</el-button>
               <el-button :loading="exportingHours" type="success" style="margin-left: 8px" @click="handleExportHours">导出收入成本及工时明细</el-button>
             </div>
           </div>

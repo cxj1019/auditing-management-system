@@ -3,6 +3,17 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/api/request'
+
+async function exportArchive(): Promise<void> {
+  const resp = await request.get(`/projects/${projectId}/archive`, { responseType: 'blob' })
+  const blob = (resp as unknown as { data?: Blob }).data ?? (resp as unknown as Blob)
+  const url = URL.createObjectURL(blob as Blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `项目档案_${projectId}.zip`
+  link.click()
+  URL.revokeObjectURL(url)
+}
 import { useUserStore } from '@/stores/user'
 import type {
   ConfirmationAttachmentItem, ConfirmationItem, InvoiceItem, ProjectItem, PageResult,
@@ -309,6 +320,7 @@ onMounted(() => {
           <el-tag size="small" style="margin-left: 10px">{{ wb?.statusLabel === 'IN_PROGRESS' ? '进行中' : wb?.statusLabel === 'FINISHED' ? '已完成' : '已归档' }}</el-tag>
         </div>
         <el-button @click="router.push('/business/project')">返回项目列表</el-button>
+        <el-button type="primary" plain @click="exportArchive">导出项目档案</el-button>
       </div>
       <el-descriptions :column="4" size="small" style="margin-top: 8px">
         <el-descriptions-item label="项目编号">{{ wb?.projectNo }}</el-descriptions-item>
