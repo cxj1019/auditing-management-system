@@ -24,6 +24,13 @@
     </properties>
 
     <dependencies>
+        <!-- PDF 处理（函证批量导入：按页渲染识别 + 拆分归档） -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
+
         <!-- Spring Boot -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

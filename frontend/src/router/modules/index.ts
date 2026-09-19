@@ -126,6 +126,12 @@ const moduleRoutes: RouteRecordRaw[] = [
         meta: { title: '业务类型字典', perm: 'system:dict:list' },
       },
       {
+        path: 'ai',
+        name: 'SystemAi',
+        component: () => import('@/views/system/ai/index.vue'),
+        meta: { title: 'AI 设置', perm: 'system:ai:list' },
+      },
+      {
         path: 'audit',
         name: 'SystemAudit',
         component: () => import('@/views/system/audit/index.vue'),

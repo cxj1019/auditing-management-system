@@ -84,3 +84,25 @@ export function getConfirmationAttPreviewUrl(id: number, attachmentId: number): 
 export function trackConfirmationLogistics(id: number, action: 'send' | 'reply'): Promise<unknown> {
   return request.post(`/confirmations/${id}/track-logistics?action=${action}`, {}, { timeout: 120000 })
 }
+
+// ---------- 智能批量导入 ----------
+/** 解析扫描 PDF：按页识别被函证单位并分组建议 */
+export function parseConfirmationIntake(file: File): Promise<{ pages: number[]; unit: string; projectId: number | null }[]> {
+  const fd = new FormData()
+  fd.append('file', file)
+  return request.post('/confirmations/intake/parse', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000,
+  })
+}
+
+/** 确认归档：按分组拆分 PDF 挂到对应项目的函证 */
+export function confirmConfirmationIntake(file: File, groups: { pages: number[]; unit: string; projectId: number | null }[]): Promise<{ created: number; attached: number; skipped: number }> {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('groups', JSON.stringify(groups))
+  return request.post('/confirmations/intake/confirm', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000,
+  })
+}

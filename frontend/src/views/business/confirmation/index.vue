@@ -2,8 +2,8 @@
 import CaptureUpload from '@/components/CaptureUpload.vue'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  pageConfirmations,
+import { parseConfirmationIntake, confirmConfirmationIntake,
+pageConfirmations,
   createConfirmation,
   updateConfirmation,
   deleteConfirmation,
@@ -190,6 +190,85 @@ async function fetchAttachments(): Promise<void> {
   } finally { attLoading.value = false }
 }
 
+// ---------- 智能批量导入 ----------
+const intakeVisible = ref(false)
+const intakeParsing = ref(false)
+const intakeSaving = ref(false)
+const intakeFile = ref<File | null>(null)
+const intakeFileName = ref('')
+const intakeGroups = ref<{ pages: number[]; unit: string; projectId: number | null }[]>([])
+const intakeProjects = ref<ProjectItem[]>([])
+
+async function loadOptions(): Promise<void> {
+  try {
+    projectOptions.value = await projectOptionsApi()
+  } catch { /* 项目选项失败时仍可人工选择 */ }
+}
+
+function openIntake(): void {
+  intakeFile.value = null
+  intakeFileName.value = ''
+  intakeGroups.value = []
+  if (!projectOptions.value.length) loadOptions()
+  intakeVisible.value = true
+}
+
+function onIntakeFile(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] || null
+  input.value = ''
+  if (!file) return
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    ElMessage.warning('请选择扫描仪导出的 PDF 文件')
+    return
+  }
+  intakeFile.value = file
+  intakeFileName.value = file.name
+}
+
+async function handleIntakeParse(): Promise<void> {
+  if (!intakeFile.value) {
+    ElMessage.warning('请先选择扫描 PDF')
+    return
+  }
+  intakeParsing.value = true
+  try {
+    const groups = await parseConfirmationIntake(intakeFile.value)
+    intakeGroups.value = groups
+    ElMessage.success(`识别出 ${groups.length} 份函证，请核对归集项目后确认`)
+  } catch (e) {
+    ElMessage.error('解析失败：' + (e as Error).message)
+  } finally {
+    intakeParsing.value = false
+  }
+}
+
+function pagesLabel(pages: number[]): string {
+  if (!pages.length) return '—'
+  if (pages.length === 1) return `第 ${pages[0]} 页`
+  return `第 ${pages[0]}-${pages[pages.length - 1]} 页`
+}
+
+async function handleIntakeConfirm(): Promise<void> {
+  if (!intakeFile.value) return
+  const valid = intakeGroups.value.filter((g) => g.projectId && g.unit && !g.unit.startsWith('未识别'))
+  if (!valid.length) {
+    ElMessage.warning('没有可归档的分组（需识别出单位并选择项目）')
+    return
+  }
+  intakeSaving.value = true
+  try {
+    const result = await confirmConfirmationIntake(intakeFile.value, valid.map((g) => ({ pages: g.pages, unit: g.unit, projectId: g.projectId })))
+    ElMessage.success(`归档完成：新建函证 ${result.created} 条，挂入已有函证 ${result.attached} 条，跳过 ${result.skipped} 组`)
+    intakeVisible.value = false
+    fetchList()
+  } catch (e) {
+    ElMessage.error('归档失败：' + (e as Error).message)
+  } finally {
+    intakeSaving.value = false
+  }
+}
+
 async function handleUpload(attachmentType: string, files: File[]): Promise<void> {
   if (!attTargetId.value || !files.length) return
   attUploading.value = true
@@ -273,6 +352,7 @@ function rowClass({ row }: { row: ConfirmationItem }): string {
           <el-button @click="handleReset">重置</el-button>
         </div>
         <el-button v-permission="'business:confirmation:add'" type="primary" @click="openCreate">登记函证</el-button>
+          <el-button v-permission="'business:confirmation:add'" @click="openIntake">智能批量导入</el-button>
       </div>
 
       <!-- table -->
@@ -495,6 +575,49 @@ function rowClass({ row }: { row: ConfirmationItem }): string {
           </el-table-column>
         </el-table>
       </div>
+    </el-dialog>
+    <!-- 智能批量导入 -->
+    <el-dialog v-model="intakeVisible" title="函证智能批量导入" width="760px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 10px"
+        title="上传扫描仪导出的多页 PDF，AI 自动识别每页的被函证单位并按份分组，确认后自动拆分归档到对应项目的函证。" />
+      <div style="display: flex; gap: 8px; margin-bottom: 10px; align-items: center">
+        <input type="file" accept=".pdf" @change="onIntakeFile" />
+        <span v-if="intakeFileName" style="color: #6b7280; font-size: 13px">{{ intakeFileName }}</span>
+        <el-button type="primary" size="small" :loading="intakeParsing" :disabled="!intakeFile" @click="handleIntakeParse">
+          {{ intakeParsing ? 'AI 识别中…' : '开始识别' }}
+        </el-button>
+      </div>
+
+      <el-table v-if="intakeGroups.length" :data="intakeGroups" border size="small">
+        <el-table-column label="页码" width="120">
+          <template #default="{ row }">{{ pagesLabel(row.pages) }}</template>
+        </el-table-column>
+        <el-table-column label="识别的被函证单位" min-width="200">
+          <template #default="{ row }">
+            <el-input v-model="row.unit" size="small" />
+          </template>
+        </el-table-column>
+        <el-table-column label="归集项目" min-width="240">
+          <template #default="{ row }">
+            <el-select v-model="row.projectId" size="small" clearable filterable placeholder="选择项目" style="width: 100%">
+              <el-option v-for="p in projectOptions" :key="p.id" :label="`${p.projectNo} | ${p.name}`" :value="p.id" />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="" width="70">
+          <template #default="{ $index }">
+            <el-button link type="danger" size="small" @click="intakeGroups.splice($index, 1)">排除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div v-else class="m-empty" style="text-align: center; color: #9ca3af; padding: 24px 0; font-size: 13px">
+        选择 PDF 后点击"开始识别"
+      </div>
+
+      <template #footer>
+        <el-button @click="intakeVisible = false">取消</el-button>
+        <el-button type="primary" :loading="intakeSaving" :disabled="!intakeGroups.length" @click="handleIntakeConfirm">确认归档</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>

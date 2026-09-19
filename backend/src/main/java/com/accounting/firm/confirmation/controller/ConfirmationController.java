@@ -1,8 +1,12 @@
 package com.accounting.firm.confirmation.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.accounting.firm.common.aop.AuditLog;
 import com.accounting.firm.common.api.ApiResult;
+import com.accounting.firm.common.api.ResultCode;
 import com.accounting.firm.common.api.PageResult;
+import com.accounting.firm.common.security.SecurityUser;
 import com.accounting.firm.confirmation.dto.ConfirmationRequest;
 import com.accounting.firm.confirmation.entity.Confirmation;
 import com.accounting.firm.confirmation.entity.ConfirmationAttachment;
@@ -14,6 +18,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,6 +48,7 @@ public class ConfirmationController {
     private final ConfirmationAttachmentService attachmentService;
     private final com.accounting.firm.common.storage.SupabaseStorageService storageService;
     private final com.accounting.firm.confirmation.service.LogisticsScreenshotService logisticsScreenshotService;
+    private final com.accounting.firm.confirmation.service.ConfirmationIntakeService confirmationIntakeService;
 
     /** 分页筛选查询函证 */
     @PreAuthorize("hasAuthority('business:confirmation:list')")
@@ -93,6 +99,31 @@ public class ConfirmationController {
                                         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         confirmationService.changeStatus(id, action, date);
         return ApiResult.success();
+    }
+
+    // ---------- 智能批量导入（AI 识别被函证单位，拆分归档到项目） ----------
+    /** 解析扫描 PDF：按页识别被函证单位并分组建议 */
+    @PreAuthorize("hasAuthority('business:confirmation:add')")
+    @PostMapping("/intake/parse")
+    public ApiResult<List<java.util.Map<String, Object>>> intakeParse(@RequestParam("file") MultipartFile file) throws Exception {
+        return ApiResult.success(confirmationIntakeService.parseIntake(file));
+    }
+
+    /** 确认归档：按分组拆分 PDF 挂到对应项目的函证 */
+    @PreAuthorize("hasAuthority('business:confirmation:add')")
+    @PostMapping("/intake/confirm")
+    public ApiResult<java.util.Map<String, Object>> intakeConfirm(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("groups") String groupsJson,
+            @AuthenticationPrincipal SecurityUser currentUser) throws Exception {
+        List<java.util.Map<String, Object>> groups;
+        try {
+            groups = new ObjectMapper().readValue(
+                    groupsJson, new TypeReference<List<java.util.Map<String, Object>>>() { });
+        } catch (Exception e) {
+            return ApiResult.error(com.accounting.firm.common.api.ResultCode.BAD_REQUEST);
+        }
+        return ApiResult.success(confirmationIntakeService.confirmIntake(file, groups, currentUser));
     }
 
     // ---------- 附件 ----------
