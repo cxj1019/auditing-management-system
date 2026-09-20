@@ -74,7 +74,7 @@ public class BackupService {
     private final com.accounting.firm.system.mapper.SysUserRoleMapper sysUserRoleMapper;
     private final com.accounting.firm.system.mapper.SysRoleMenuMapper sysRoleMenuMapper;
     private final com.accounting.firm.system.mapper.StaffLevelMapper staffLevelMapper;
-    private final com.accounting.firm.common.backup.BackupHistoryMapper backupHistoryMapper;
+    private final com.accounting.firm.common.backup.mapper.BackupHistoryMapper backupHistoryMapper;
     private final SupabaseStorageService storageService;
 
     /** 每日北京时间 02:30（UTC 18:30）自动备份 */
