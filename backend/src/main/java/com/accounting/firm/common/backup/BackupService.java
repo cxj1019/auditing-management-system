@@ -76,6 +76,7 @@ public class BackupService {
     private final com.accounting.firm.system.mapper.StaffLevelMapper staffLevelMapper;
     private final com.accounting.firm.common.backup.mapper.BackupHistoryMapper backupHistoryMapper;
     private final SupabaseStorageService storageService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /** 每日北京时间 02:30（UTC 18:30）自动备份 */
     @Scheduled(cron = "0 30 18 * * ?")
@@ -120,8 +121,7 @@ public class BackupService {
 
             for (var entry : tables.entrySet()) {
                 zip.putNextEntry(new ZipEntry("data/" + entry.getKey() + ".json"));
-                zip.write(new com.fasterxml.jackson.databind.ObjectMapper()
-                        .writerWithDefaultPrettyPrinter()
+                zip.write(objectMapper.writerWithDefaultPrettyPrinter()
                         .writeValueAsString(entry.getValue())
                         .getBytes(StandardCharsets.UTF_8));
                 zip.closeEntry();
@@ -155,7 +155,7 @@ public class BackupService {
             }
 
             // ---- 3) 清单 ----
-            String manifest = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
+            String manifest = objectMapper.writeValueAsString(
                     Map.of("backupTime", LocalDateTime.now().toString(), "tables", tableCount, "files", fileCount));
             zip.putNextEntry(new ZipEntry("manifest.json"));
             zip.write(manifest.getBytes(StandardCharsets.UTF_8));
