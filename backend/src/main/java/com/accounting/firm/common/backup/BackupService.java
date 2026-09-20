@@ -46,7 +46,7 @@ import java.util.zip.ZipOutputStream;
 
 /**
  * 每日完整备份：全部业务表 JSON + 全部附件文件，打成一个 ZIP 上传到对象存储 backups/ 目录。
- * 保留策略：每日备份保留 30 天；每月 1 号的备份视为月备保留 1 年。
+ * 保留策略：仅保留最近 7 天的每日备份。
  */
 @Slf4j
 @Service
@@ -179,16 +179,14 @@ public class BackupService {
         return Map.of("path", path, "sizeBytes", zipBytes.length, "tables", tableCount, "files", fileCount);
     }
 
-    /** 保留策略：日备 30 天；每月 1 号的月备 1 年 */
+    /** 保留策略：仅保留最近 7 天的每日备份，过期的自动清理 */
     private void applyRetention() {
         var now = java.time.LocalDateTime.now();
         for (var row : backupHistoryMapper.selectList(new LambdaQueryWrapper<com.accounting.firm.common.backup.BackupHistory>()
                 .orderByAsc(com.accounting.firm.common.backup.BackupHistory::getCreateTime))) {
             if (row.getCreateTime() == null) continue;
-            boolean isMonthly = row.getCreateTime().getDayOfMonth() == 1;
             long days = java.time.temporal.ChronoUnit.DAYS.between(row.getCreateTime(), now);
-            boolean expired = isMonthly ? days > 365 : days > 30;
-            if (expired) {
+            if (days > 7) {
                 try {
                     storageService.delete(row.getObjectPath());
                 } catch (Exception e) {

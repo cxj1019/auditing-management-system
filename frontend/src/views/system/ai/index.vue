@@ -115,7 +115,7 @@ onMounted(() => {
         </div>
       </template>
       <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px">
-        备份为完整 ZIP（表数据 JSON + 全部附件原文件），保留最近 30 天每日备份与每月 1 日备份（保留 1 年）。
+        备份为完整 ZIP（表数据 JSON + 全部附件原文件），仅保留最近 7 天的每日备份。
       </p>
       <el-table v-loading="backupLoading" :data="backupHistory" border size="small" max-height="300">
         <el-table-column label="备份时间" min-width="150">
