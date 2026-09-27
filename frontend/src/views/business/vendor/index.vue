@@ -450,7 +450,7 @@ onMounted(async () => {
             <el-button link size="small" @click="printPayment(row)">打印</el-button>
             <template v-if="row.status === 0 || row.status === 3">
               <el-button v-if="canEdit" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-              <el-button v-if="canEdit" link type="success" size="small" @click="handleSubmit(row)">提交</el-button>
+              <el-button v-if="canAdd" link type="success" size="small" @click="handleSubmit(row)">提交</el-button>
               <el-button v-if="canDelete" link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
             </template>
             <template v-else-if="row.status === 1">
