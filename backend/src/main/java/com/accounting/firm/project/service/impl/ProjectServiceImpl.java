@@ -374,9 +374,14 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
 
         // 已批准报销明细（行级归集到本项目，不含税）
         java.util.List<java.util.Map<String, Object>> reimbRows = new java.util.ArrayList<>();
+        // 归集口径与成本分析一致：行级 project_id 命中 OR 随单头（COALESCE）
         var reimbItems = reimbursementItemMapper.selectList(
                 new LambdaQueryWrapper<com.accounting.firm.reimbursement.entity.ReimbursementItem>()
-                        .eq(com.accounting.firm.reimbursement.entity.ReimbursementItem::getProjectId, projectId));
+                        .and(w -> w
+                                .eq(com.accounting.firm.reimbursement.entity.ReimbursementItem::getProjectId, projectId)
+                                .or(w2 -> w2.isNull(com.accounting.firm.reimbursement.entity.ReimbursementItem::getProjectId)
+                                        .inSql(com.accounting.firm.reimbursement.entity.ReimbursementItem::getReimbursementId,
+                                                "SELECT id FROM reimbursement WHERE project_id = " + projectId))));
         if (!reimbItems.isEmpty()) {
             java.util.List<Long> billIds = reimbItems.stream()
                     .map(com.accounting.firm.reimbursement.entity.ReimbursementItem::getReimbursementId)
