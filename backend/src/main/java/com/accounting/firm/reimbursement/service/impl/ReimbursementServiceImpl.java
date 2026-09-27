@@ -92,8 +92,11 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
 
     @Override
     public void restore(Long id, SecurityUser currentUser) {
-        Reimbursement bill = getById(id);
-        if (bill == null || bill.getDeleted() == null || bill.getDeleted() != 1) {
+        // getById 会因 @TableLogic 过滤已删除记录，必须从回收站查询中找
+        Reimbursement bill = baseMapper.selectDeleted().stream()
+                .filter(b -> b.getId().equals(id))
+                .findFirst().orElse(null);
+        if (bill == null) {
             throw new BusinessException("报销单不在回收站中");
         }
         boolean seeAll = currentUser.hasRole("admin") || currentUser.hasRole("finance")
