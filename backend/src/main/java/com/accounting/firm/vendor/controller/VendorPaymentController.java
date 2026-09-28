@@ -66,8 +66,8 @@ public class VendorPaymentController {
         return ApiResult.success();
     }
 
-    /** 提交审批（本人） */
-    @PreAuthorize("hasAuthority('business:vendor:edit')")
+    /** 提交审批（本人；随登记权限） */
+    @PreAuthorize("hasAuthority('business:vendor:add')")
     @PutMapping("/{id}/submit")
     public ApiResult<Void> submit(@PathVariable Long id, @AuthenticationPrincipal SecurityUser currentUser) {
         vendorPaymentService.submit(id, currentUser);
