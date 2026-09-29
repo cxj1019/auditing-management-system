@@ -408,8 +408,13 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
     private String generateNo() {
         String year = String.valueOf(LocalDate.now().getYear());
         String prefix = "FK" + year;
-        Long count = lambdaQuery().likeRight(VendorPayment::getPaymentNo, prefix).count();
-        return prefix + String.format(Locale.ROOT, "%04d", count + 1);
+        // max 必须含已软删除行（count 会在软删后回退导致撞号）
+        String maxNo = baseMapper.selectMaxNoIncludingDeleted(prefix);
+        int sequence = 1;
+        if (maxNo != null && maxNo.startsWith(prefix) && maxNo.length() == prefix.length() + 4) {
+            sequence = Integer.parseInt(maxNo.substring(prefix.length())) + 1;
+        }
+        return prefix + String.format(Locale.ROOT, "%04d", sequence);
     }
 
     // ---------- 附件 ----------

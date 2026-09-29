@@ -26,6 +26,10 @@ public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
     @Update("UPDATE reimbursement SET deleted = 0 WHERE id = #{id}")
     int restoreById(@Param("id") Long id);
 
+    /** 当日最大编号（含已软删除行：软删行仍占用唯一键，max 若剔除会导致新单号撞号） */
+    @Select("SELECT MAX(reimbursement_no) FROM reimbursement WHERE reimbursement_no LIKE CONCAT(#{prefix}, '%')")
+    String selectMaxNoIncludingDeleted(@Param("prefix") String prefix);
+
     /** 导出费用明细扁平行（按明细费用日期范围筛选） */
     @Select("""
             <script>

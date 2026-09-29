@@ -602,12 +602,9 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
     private String generateNo() {
         LocalDate today = LocalDate.now();
         String prefix = "BX" + "%1$tY%1$tm%1$td".formatted(today);
-        Reimbursement maxBill = lambdaQuery()
-                .likeRight(Reimbursement::getReimbursementNo, prefix)
-                .orderByDesc(Reimbursement::getReimbursementNo)
-                .last("LIMIT 1")
-                .one();
-        return ReimbursementNoGenerator.next(today, maxBill == null ? null : maxBill.getReimbursementNo());
+        // 必须含已软删除行：软删行仍占用唯一键，剔除会导致流水号回退撞号
+        String maxNo = baseMapper.selectMaxNoIncludingDeleted(prefix);
+        return ReimbursementNoGenerator.next(today, maxNo);
     }
 
     private static BigDecimal nvl(BigDecimal v) {
