@@ -152,3 +152,15 @@ export function deleteVendorInvoice(id: number): Promise<void> {
 export function writeOffPayment(id: number, invoiceId: number): Promise<void> {
   return request.put(`/vendor-payments/${id}/write-off?invoiceId=${invoiceId}`)
 }
+
+// ---------- 回收站 ----------
+
+/** 回收站：已软删除的付款单 */
+export function listRecycleVendorPayments(): Promise<VendorPaymentItem[]> {
+  return request.get('/vendor-payments/recycle')
+}
+
+/** 从回收站恢复付款单 */
+export function restoreVendorPayment(id: number): Promise<void> {
+  return request.put(`/vendor-payments/recycle/${id}/restore`)
+}

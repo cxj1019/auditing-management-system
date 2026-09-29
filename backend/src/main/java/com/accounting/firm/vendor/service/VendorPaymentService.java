@@ -26,6 +26,12 @@ public interface VendorPaymentService extends IService<VendorPayment> {
 
     void delete(Long id, SecurityUser currentUser);
 
+    /** 回收站：已软删除的付款单 */
+    List<VendorPayment> recycleList(SecurityUser currentUser);
+
+    /** 从回收站恢复 */
+    void restore(Long id, SecurityUser currentUser);
+
     void approve(Long id, String action, String comment, SecurityUser currentUser);
 
     void markPaid(Long id, SecurityUser currentUser);

@@ -215,6 +215,32 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
     }
 
     @Override
+    public List<VendorPayment> recycleList(SecurityUser currentUser) {
+        List<VendorPayment> rows = baseMapper.selectDeleted();
+        boolean seeAll = currentUser.hasRole("admin") || currentUser.hasRole("finance")
+                || dataScopeService.roleLevel(currentUser.getUserId()) >= 2;
+        if (seeAll) return rows;
+        return rows.stream().filter(p -> currentUser.getUsername().equals(p.getCreateBy())).toList();
+    }
+
+    @Override
+    public void restore(Long id, SecurityUser currentUser) {
+        // getById 会因 @TableLogic 过滤已删除记录，必须从回收站查询中找
+        VendorPayment payment = baseMapper.selectDeleted().stream()
+                .filter(p -> p.getId().equals(id))
+                .findFirst().orElse(null);
+        if (payment == null) {
+            throw new BusinessException("付款单不在回收站中");
+        }
+        boolean seeAll = currentUser.hasRole("admin") || currentUser.hasRole("finance")
+                || dataScopeService.roleLevel(currentUser.getUserId()) >= 2;
+        if (!seeAll && !currentUser.getUsername().equals(payment.getCreateBy())) {
+            throw new BusinessException("仅登记人或管理员可恢复");
+        }
+        baseMapper.restoreById(id);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void approve(Long id, String action, String comment, SecurityUser currentUser) {
         VendorPayment payment = getById(id);

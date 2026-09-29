@@ -8,6 +8,7 @@ import {
   withdrawVendorPayment, deleteVendorPayment, approveVendorPayment, markVendorPaid,
   listVendorAttachments, uploadVendorAttachment, deleteVendorAttachment, downloadVendorAttachment,
   listVendorInvoices, createVendorInvoice, updateVendorInvoice, deleteVendorInvoice, writeOffPayment as writeOffPaymentApi,
+  listRecycleVendorPayments, restoreVendorPayment,
 } from '@/api/vendor'
 import type { VendorAttachmentItem, VendorInvoiceItem, VendorPaymentItem } from '@/api/vendor'
 import { projectOptions as projectOptionsApi } from '@/api/project'
@@ -391,6 +392,34 @@ async function handleDownload(att: VendorAttachmentItem): Promise<void> {
   await downloadVendorAttachment(detail.value.id, att.id, att.fileName)
 }
 
+// ---------- 回收站 ----------
+const recycleVisible = ref(false)
+const recycleLoading = ref(false)
+const recycleRows = ref<VendorPaymentItem[]>([])
+const restoring = ref(false)
+
+async function openRecycle(): Promise<void> {
+  recycleVisible.value = true
+  recycleLoading.value = true
+  try {
+    recycleRows.value = await listRecycleVendorPayments()
+  } finally {
+    recycleLoading.value = false
+  }
+}
+
+async function handleRestore(row: VendorPaymentItem): Promise<void> {
+  restoring.value = true
+  try {
+    await restoreVendorPayment(row.id)
+    ElMessage.success('已恢复')
+    openRecycle()
+    fetchList()
+  } finally {
+    restoring.value = false
+  }
+}
+
 onMounted(async () => {
   fetchList()
   try {
@@ -414,6 +443,7 @@ onMounted(async () => {
           <el-button @click="handleReset">重置</el-button>
         </div>
         <div>
+          <el-button style="margin-right: 8px" @click="openRecycle">回收站</el-button>
           <el-button v-if="canAdd" type="primary" @click="openCreate">登记付款</el-button>
         </div>
       </div>
@@ -680,6 +710,19 @@ onMounted(async () => {
         <el-button type="primary" @click="handleWriteOff">核销</el-button>
       </template>
     </el-dialog>
+
+  <el-dialog v-model="recycleVisible" title="回收站（已删除的付款单）" width="640px">
+    <el-table v-loading="recycleLoading" :data="recycleRows" border size="small" max-height="420">
+      <el-table-column prop="paymentNo" label="付款编号" min-width="120" />
+      <el-table-column prop="summary" label="摘要" min-width="160" show-overflow-tooltip />
+      <el-table-column prop="vendorName" label="供应商" min-width="140" show-overflow-tooltip />
+      <el-table-column label="操作" width="90">
+        <template #default="{ row }">
+          <el-button link type="primary" size="small" :loading="restoring" @click="handleRestore(row)">恢复</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+  </el-dialog>
   </div>
 </template>
 

@@ -9,8 +9,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -65,6 +67,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ApiResult<Void> handleHttpMessageNotReadableException(HttpMessageNotReadableException e) {
         return ApiResult.error(ResultCode.BAD_REQUEST, "请求体格式错误");
+    }
+
+    /** 缺少必填请求参数（@RequestParam） */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ApiResult<Void> handleMissingParameter(MissingServletRequestParameterException e) {
+        log.warn("缺少请求参数: {}", e.getParameterName());
+        return ApiResult.error(ResultCode.BAD_REQUEST, "缺少请求参数: " + e.getParameterName());
+    }
+
+    /** 请求参数类型不匹配 */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ApiResult<Void> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        log.warn("请求参数类型错误: {}", e.getName());
+        return ApiResult.error(ResultCode.BAD_REQUEST, "请求参数类型错误: " + e.getName());
     }
 
     /** 静态资源/路径不存在 */

@@ -90,6 +90,21 @@ public class VendorPaymentController {
         return ApiResult.success();
     }
 
+    /** 回收站：已软删除的付款单 */
+    @PreAuthorize("hasAuthority('business:vendor:list')")
+    @GetMapping("/recycle")
+    public ApiResult<List<VendorPayment>> recycle(@AuthenticationPrincipal SecurityUser currentUser) {
+        return ApiResult.success(vendorPaymentService.recycleList(currentUser));
+    }
+
+    /** 从回收站恢复 */
+    @PreAuthorize("hasAuthority('business:vendor:list')")
+    @PutMapping("/recycle/{id}/restore")
+    public ApiResult<Void> restore(@PathVariable Long id, @AuthenticationPrincipal SecurityUser currentUser) {
+        vendorPaymentService.restore(id, currentUser);
+        return ApiResult.success();
+    }
+
     /** 审批：approve 批准 / reject 驳回 */
     @PreAuthorize("hasAuthority('business:vendor:approve')")
     @PutMapping("/{id}/approve")
