@@ -202,16 +202,7 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
             throw new BusinessException("仅登记人可以删除");
         }
         removeById(id);
-        var atts = attachmentMapper.selectList(new LambdaQueryWrapper<VendorPaymentAttachment>()
-                .eq(VendorPaymentAttachment::getPaymentId, id));
-        for (var att : atts) {
-            try {
-                storageService.delete(att.getStoredName());
-            } catch (Exception e) {
-                log.warn("删除付款附件存储对象失败: {}", att.getStoredName());
-            }
-            attachmentMapper.deleteById(att.getId());
-        }
+        // 仅软删单头：附件必须保留，否则回收站恢复后单据丢附件
     }
 
     @Override

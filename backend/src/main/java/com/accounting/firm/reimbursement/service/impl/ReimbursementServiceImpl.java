@@ -335,13 +335,8 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         if (!isApplicant(bill, currentUser)) {
             throw new BusinessException("仅申请人可以删除草稿");
         }
-        List<Long> itemIds = itemMapper.selectList(new LambdaQueryWrapper<ReimbursementItem>()
-                        .eq(ReimbursementItem::getReimbursementId, id))
-                .stream().map(ReimbursementItem::getId).toList();
+        // 仅软删单头：明细与附件必须保留，否则回收站恢复后单据丢数据
         removeById(id);
-        itemMapper.delete(new LambdaQueryWrapper<ReimbursementItem>()
-                .eq(ReimbursementItem::getReimbursementId, id));
-        cleanupAttachmentsOfItems(itemIds);
     }
 
     @Override

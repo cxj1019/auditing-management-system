@@ -89,6 +89,13 @@ public class GlobalExceptionHandler {
         return ApiResult.error(ResultCode.NOT_FOUND);
     }
 
+    /** 请求方法与路径不匹配（如对只读路径发 PUT） */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ApiResult<Void> handleMethodNotSupported(org.springframework.web.HttpRequestMethodNotSupportedException e) {
+        log.warn("请求方法不支持: {}", e.getMessage());
+        return ApiResult.error(ResultCode.NOT_FOUND);
+    }
+
     /** 未预期异常：只返回通用错误，不泄露堆栈与内部信息 */
     @ExceptionHandler(Exception.class)
     public ApiResult<Void> handleException(Exception e) {

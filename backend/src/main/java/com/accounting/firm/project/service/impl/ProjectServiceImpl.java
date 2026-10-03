@@ -293,6 +293,13 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper, Project> impl
         if (project == null) {
             throw new BusinessException("项目不存在");
         }
+        // 与列表同口径的部门隔离：越权访问按资源不存在处理
+        var scope = dataScopeService.currentScope();
+        switch (scope.type()) {
+            case DEPT -> { if (!scope.deptId().equals(project.getDeptId())) throw new BusinessException("资源不存在"); }
+            case SELF -> { if (!scope.username().equals(project.getCreateBy())) throw new BusinessException("资源不存在"); }
+            default -> { }
+        }
         com.accounting.firm.project.dto.ProjectWorkbenchVO vo = new com.accounting.firm.project.dto.ProjectWorkbenchVO();
         vo.setProjectId(project.getId());
         vo.setProjectNo(project.getProjectNo());
