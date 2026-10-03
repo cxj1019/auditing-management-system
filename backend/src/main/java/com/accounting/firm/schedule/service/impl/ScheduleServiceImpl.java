@@ -100,6 +100,17 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             throw new BusinessException("日程不存在");
         }
         requireNotLocked(schedule.getScheduleDate());
+        // 归属校验：本人创建的日程，或本部门经理及以上，或 admin；否则按资源不存在处理
+        if (!currentUser.hasRole("admin") && !currentUser.getUsername().equals(schedule.getCreateBy())) {
+            SysUser creator = sysUserMapper.selectOne(
+                    new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, schedule.getCreateBy()));
+            boolean deptManager = creator != null && creator.getDeptId() != null
+                    && creator.getDeptId().equals(currentUser.getDeptId())
+                    && dataScopeService.roleLevel(currentUser.getUserId()) >= 2;
+            if (!deptManager) {
+                throw new BusinessException("资源不存在");
+            }
+        }
         requireValidProject(request.getProjectId());
         copyFields(request, schedule);
         updateById(schedule);
