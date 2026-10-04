@@ -64,22 +64,51 @@ public class AiChatClient {
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(payload.toString()))
                 .build();
-        try {
-            HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() / 100 != 2) {
-                throw new com.accounting.firm.common.exception.BusinessException(
-                        "AI 接口返回 " + response.statusCode() + "：" + truncate(response.body(), 300));
+        // 免费池对多图请求偶发 429/5xx（上游轮询不稳），做有限重试
+        com.accounting.firm.common.exception.BusinessException lastError = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 429 || response.statusCode() >= 500) {
+                    lastError = new com.accounting.firm.common.exception.BusinessException(
+                            "AI 接口返回 " + response.statusCode() + "：" + truncate(response.body(), 300));
+                    if (attempt < 3) {
+                        Thread.sleep(attempt * 8000L);
+                        continue;
+                    }
+                    throw lastError;
+                }
+                if (response.statusCode() / 100 != 2) {
+                    throw new com.accounting.firm.common.exception.BusinessException(
+                            "AI 接口返回 " + response.statusCode() + "：" + truncate(response.body(), 300));
+                }
+                String reply = extractContent(response.body());
+                if (reply == null || reply.isBlank()) {
+                    throw new com.accounting.firm.common.exception.BusinessException("AI 返回内容为空");
+                }
+                return reply;
+            } catch (com.accounting.firm.common.exception.BusinessException e) {
+                if (e == lastError) continue; // 已在上方计入重试
+                throw e;
+            } catch (java.net.http.HttpTimeoutException | java.io.IOException e) {
+                lastError = new com.accounting.firm.common.exception.BusinessException("调用 AI 接口失败：" + e.getMessage());
+                if (attempt < 3) {
+                    try {
+                        Thread.sleep(attempt * 8000L);
+                        continue;
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new com.accounting.firm.common.exception.BusinessException("AI 调用被中断");
+                    }
+                }
+                throw lastError;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new com.accounting.firm.common.exception.BusinessException("AI 调用被中断");
             }
-            String reply = extractContent(response.body());
-            if (reply == null || reply.isBlank()) {
-                throw new com.accounting.firm.common.exception.BusinessException("AI 返回内容为空");
-            }
-            return reply;
-        } catch (com.accounting.firm.common.exception.BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new com.accounting.firm.common.exception.BusinessException("调用 AI 接口失败：" + e.getMessage());
         }
+        throw lastError != null ? lastError
+                : new com.accounting.firm.common.exception.BusinessException("调用 AI 接口失败");
     }
 
     private String extractContent(String responseBody) {

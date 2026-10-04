@@ -46,7 +46,8 @@ public class ConfirmationIntakeServiceImpl implements ConfirmationIntakeService 
     private static final int MAX_PAGES = 40;
     private static final float RENDER_DPI = 130;
     /** 每批送给视觉模型的页数（控制 token 体积） */
-    private static final int AI_BATCH_SIZE = 8;
+    // 每批页数：与"银行函证通常 3 页/份"对齐；小包更抗免费上游的 429/5xx，分组本就跨批合并
+    private static final int AI_BATCH_SIZE = 3;
 
     private final AiChatClient aiChatClient;
     private final ConfirmationMapper confirmationMapper;
