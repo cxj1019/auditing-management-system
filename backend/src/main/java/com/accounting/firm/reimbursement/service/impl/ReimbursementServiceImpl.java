@@ -52,6 +52,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
     private final DataScopeService dataScopeService;
     private final com.accounting.firm.notify.service.NotifyService notifyService;
     private final SysUserMapper sysUserMapper;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     /** 二级审批阈值（元）：一级批准时超过该金额转终审 */
     @Value("${reimbursement.second-approval-threshold:5000}")
@@ -197,7 +198,6 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Long createDraft(ReimbursementRequest request, SecurityUser currentUser) {
         requireValidProject(request.getProjectId());
         requireValidItemsProjects(request.getItems());
@@ -211,10 +211,23 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         bill.setStatus(ReimbursementStatus.DRAFT.getCode());
         bill.setIsInvoiceReceived(false);
         bill.setIsPaid(false);
-        save(bill);
-        replaceItems(bill.getId(), request.getItems());
-        recalculateTotal(bill.getId());
-        return bill.getId();
+        // 并发兜底：撞唯一键后 PG 事务即中止，必须在事务外重取单号重试
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return transactionTemplate.execute(tx -> {
+                    save(bill);
+                    replaceItems(bill.getId(), request.getItems());
+                    recalculateTotal(bill.getId());
+                    return bill.getId();
+                });
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                if (attempt >= 3) {
+                    throw e;
+                }
+                bill.setId(null);
+                bill.setReimbursementNo(generateNo());
+            }
+        }
     }
 
     /** 本轮更新中被移除的明细行 ID（供附件级联清理） */

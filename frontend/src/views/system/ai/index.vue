@@ -7,6 +7,7 @@ import request from '@/api/request'
 const loading = ref(false)
 const saving = ref(false)
 const form = reactive({ baseUrl: '', apiKey: '', model: '' })
+const apiKeyMasked = ref('')
 const configured = ref(false)
 
 interface BackupRow { id: number; objectPath: string; sizeBytes: number; fileCount: number; createTime: string }
@@ -14,6 +15,71 @@ interface BackupRow { id: number; objectPath: string; sizeBytes: number; fileCou
 const backupRunning = ref(false)
 const backupHistory = ref<BackupRow[]>([])
 const backupLoading = ref(false)
+
+// ---- 邮件通知设置 ----
+interface MailSettings { host?: string; port?: string; username?: string; passwordMasked?: string; from?: string; enabled?: boolean; ready?: boolean }
+const mailForm = reactive({ host: '', port: '465', username: '', password: '', from: '', enabled: false })
+const mailReady = ref(false)
+const mailSaving = ref(false)
+const mailTesting = ref(false)
+const testMailTo = ref('')
+
+async function fetchMailSettings(): Promise<void> {
+  try {
+    const d = await request.get('/system/mail-settings') as unknown as MailSettings
+    mailForm.host = d.host || ''
+    mailForm.port = d.port || '465'
+    mailForm.username = d.username || ''
+    mailForm.password = ''
+    mailForm.from = d.from || ''
+    mailForm.enabled = !!d.enabled
+    mailReady.value = !!d.ready
+  } catch { /* 无权限时不显示 */ }
+}
+
+async function handleSaveMail(): Promise<void> {
+  if (!mailForm.host.trim() || !mailForm.username.trim() || !mailForm.from.trim()) {
+    ElMessage.warning('请填写 SMTP 服务器、账号和发件人')
+    return
+  }
+  mailSaving.value = true
+  try {
+    await request.put('/system/mail-settings', {
+      host: mailForm.host, port: mailForm.port, username: mailForm.username,
+      password: mailForm.password, from: mailForm.from, enabled: mailForm.enabled ? 'true' : 'false',
+    })
+    ElMessage.success('邮件设置已保存')
+    fetchMailSettings()
+  } finally {
+    mailSaving.value = false
+  }
+}
+
+async function handleTestMail(): Promise<void> {
+  if (!testMailTo.value.trim()) {
+    ElMessage.warning('请填写测试收件邮箱')
+    return
+  }
+  mailTesting.value = true
+  try {
+    await request.post('/system/mail-settings/test', { to: testMailTo.value })
+    ElMessage.success('测试邮件已发送，请查收')
+  } finally {
+    mailTesting.value = false
+  }
+}
+
+// ---- 回收站/审计日志清理 ----
+const cleanupRunning = ref(false)
+async function handleRetentionRun(): Promise<void> {
+  cleanupRunning.value = true
+  try {
+    const msg = await request.post('/system/retention/run') as unknown as string
+    ElMessage.success(msg || '清理完成')
+  } finally {
+    cleanupRunning.value = false
+  }
+}
 
 async function fetchBackupHistory(): Promise<void> {
       backupLoading.value = true
@@ -50,7 +116,8 @@ async function fetchSettings(): Promise<void> {
   try {
     const data = await getAiSettings()
     form.baseUrl = (data.baseUrl as string) || ''
-    form.apiKey = (data.apiKey as string) || ''
+    form.apiKey = ''
+    apiKeyMasked.value = (data.apiKeyMasked as string) || ''
     form.model = (data.model as string) || ''
     configured.value = !!data.configured
   } finally {
@@ -59,8 +126,12 @@ async function fetchSettings(): Promise<void> {
 }
 
 async function handleSave(): Promise<void> {
-  if (!form.baseUrl.trim() || !form.apiKey.trim() || !form.model.trim()) {
-    ElMessage.warning('请完整填写接口地址、API Key 和模型名')
+  if (!form.baseUrl.trim() || !form.model.trim()) {
+    ElMessage.warning('请完整填写接口地址和模型名')
+    return
+  }
+  if (!apiKeyMasked.value && !form.apiKey.trim()) {
+    ElMessage.warning('请填写 API Key')
     return
   }
   saving.value = true
@@ -76,6 +147,7 @@ async function handleSave(): Promise<void> {
 onMounted(() => {
       fetchSettings()
       fetchBackupHistory()
+      fetchMailSettings()
     })
 </script>
 
@@ -89,11 +161,11 @@ onMounted(() => {
         <el-form-item label="接口地址" required>
           <el-input v-model="form.baseUrl" placeholder="如 https://api.openai.com/v1 或 https://dashscope.aliyuncs.com/compatible-mode/v1" />
         </el-form-item>
-        <el-form-item label="API Key" required>
-          <el-input v-model="form.apiKey" type="password" show-password placeholder="sk-..." />
+        <el-form-item label="API Key" :required="!apiKeyMasked">
+          <el-input v-model="form.apiKey" type="password" show-password :placeholder="apiKeyMasked ? `已保存 ${apiKeyMasked}，留空保持不变` : 'sk-...'" />
         </el-form-item>
         <el-form-item label="模型" required>
-          <el-input v-model="form.model" placeholder="如 gpt-4o-mini / qwen-vl-plus / deepseek-chat" />
+          <el-input v-model="form.model" placeholder="如 gemini-3.6-flash / glm-4.6v / qwen-vl-plus（需支持图片输入）" />
         </el-form-item>
         <el-form-item>
           <el-tag v-if="configured" type="success" size="small">已配置（函证智能导入可用）</el-tag>
@@ -105,6 +177,42 @@ onMounted(() => {
       </el-form>
       <el-alert type="info" :closable="false" show-icon
         title="用途说明" description="函证管理的「智能批量导入」会把扫描 PDF 按页发给该视觉模型识别被函证单位，请选择支持图片输入的模型。" />
+    </el-card>
+
+    <el-card shadow="never" style="max-width: 680px; margin-top: 12px">
+      <template #header>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <span>邮件通知设置（SMTP，审批/提醒将同步发邮件）</span>
+          <el-tag :type="mailReady ? 'success' : 'info'" size="small">{{ mailReady ? '已就绪' : '未启用' }}</el-tag>
+        </div>
+      </template>
+      <el-form label-width="110px">
+        <el-form-item label="启用">
+          <el-switch v-model="mailForm.enabled" />
+        </el-form-item>
+        <el-form-item label="SMTP 服务器" required>
+          <el-input v-model="mailForm.host" placeholder="如 smtp.exmail.qq.com" />
+        </el-form-item>
+        <el-form-item label="端口">
+          <el-input v-model="mailForm.port" placeholder="SSL 端口一般为 465" />
+        </el-form-item>
+        <el-form-item label="SMTP 账号" required>
+          <el-input v-model="mailForm.username" placeholder="发件邮箱账号" />
+        </el-form-item>
+        <el-form-item label="SMTP 密码">
+          <el-input v-model="mailForm.password" type="password" show-password placeholder="已保存则留空保持不变" />
+        </el-form-item>
+        <el-form-item label="发件人" required>
+          <el-input v-model="mailForm.from" placeholder="与 SMTP 账号一致，如 system@firm.cn" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="mailSaving" @click="handleSaveMail">保存</el-button>
+          <el-input v-model="testMailTo" placeholder="测试收件邮箱" style="width: 220px; margin-left: 12px" />
+          <el-button :loading="mailTesting" style="margin-left: 8px" @click="handleTestMail">发送测试邮件</el-button>
+        </el-form-item>
+      </el-form>
+      <el-alert type="info" :closable="false" show-icon
+        title="说明" description="员工账号名即邮箱（如 wangjp@mytscpa.com）时才会收到邮件提醒；测试账号（firm.cn 假邮箱）不会发送。" />
     </el-card>
 
     <el-card shadow="never" style="max-width: 680px; margin-top: 12px">
@@ -131,6 +239,10 @@ onMounted(() => {
           <template #default="{ row }">{{ row.objectPath }}</template>
         </el-table-column>
       </el-table>
+      <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px">
+        <el-button size="small" :loading="cleanupRunning" @click="handleRetentionRun">立即执行保留策略清理</el-button>
+        <span style="color: #9ca3af; font-size: 12px">审计日志保留 180 天；回收站单据保留 30 天后连同附件彻底清除（每日 02:40 自动）</span>
+      </div>
     </el-card>
   </div>
 </template>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import CaptureUpload from '@/components/CaptureUpload.vue'
+import * as XLSX from 'xlsx'
+import request from '@/api/request'
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { parseConfirmationIntake, confirmConfirmationIntake,
@@ -190,6 +192,28 @@ async function fetchAttachments(): Promise<void> {
   } finally { attLoading.value = false }
 }
 
+// ---------- 台账导出 ----------
+const exporting = ref(false)
+async function handleExport(): Promise<void> {
+  exporting.value = true
+  try {
+    const rows = await request.get('/confirmations/export-rows') as unknown as Record<string, string>[]
+    const header = ['函证编号', '被函证单位', '类型', '方式', '项目', '状态', '发出日期', '发出快递单号', '回函日期', '回函快递单号', '已回函', '登记人', '登记日期']
+    const aoa = [header, ...rows.map((r) => [
+      r.confirmationNo, r.targetUnit, r.type, r.method, r.projectName, r.statusLabel,
+      r.sentDate || '', r.sendTrackingNo || '', r.confirmedDate || '', r.replyTrackingNo || '',
+      r.hasReply, r.createBy, r.createTime,
+    ])]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '函证台账')
+    XLSX.writeFile(wb, `函证台账_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    ElMessage.success(`已导出 ${rows.length} 条`)
+  } finally {
+    exporting.value = false
+  }
+}
+
 // ---------- 智能批量导入 ----------
 const intakeVisible = ref(false)
 const intakeParsing = ref(false)
@@ -351,6 +375,7 @@ function rowClass({ row }: { row: ConfirmationItem }): string {
           <el-button type="primary" style="margin-left: 8px" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
         </div>
+        <el-button :loading="exporting" @click="handleExport">导出台账</el-button>
         <el-button v-permission="'business:confirmation:add'" type="primary" @click="openCreate">登记函证</el-button>
           <el-button v-permission="'business:confirmation:add'" @click="openIntake">智能批量导入</el-button>
       </div>

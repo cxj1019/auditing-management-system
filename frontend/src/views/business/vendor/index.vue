@@ -9,6 +9,7 @@ import {
   listVendorAttachments, uploadVendorAttachment, deleteVendorAttachment, downloadVendorAttachment,
   listVendorInvoices, createVendorInvoice, updateVendorInvoice, deleteVendorInvoice, writeOffPayment as writeOffPaymentApi,
   listRecycleVendorPayments, restoreVendorPayment,
+  listVendors, createVendor, updateVendor, deleteVendor,
 } from '@/api/vendor'
 import type { VendorAttachmentItem, VendorInvoiceItem, VendorPaymentItem } from '@/api/vendor'
 import { projectOptions as projectOptionsApi } from '@/api/project'
@@ -74,6 +75,72 @@ async function fetchInvoices(): Promise<void> {
 
 function onTabChange(tab: string): void {
   if (tab === 'invoices') fetchInvoices()
+  if (tab === 'masters') fetchMasters()
+}
+
+// ---------- 供应商主数据 ----------
+interface VendorMaster { id: number; vendorName: string; taxNo?: string; bankAccount?: string; contact?: string; phone?: string; remark?: string }
+const masterRows = ref<VendorMaster[]>([])
+const masterLoading = ref(false)
+const masterDialogVisible = ref(false)
+const masterSaving = ref(false)
+const editingMasterId = ref<number | null>(null)
+const masterForm = reactive({ vendorName: '', taxNo: '', bankAccount: '', contact: '', phone: '', remark: '' })
+const vendorOptions = ref<VendorMaster[]>([])
+
+async function fetchMasters(): Promise<void> {
+  masterLoading.value = true
+  try {
+    masterRows.value = await listVendors()
+    vendorOptions.value = masterRows.value
+  } finally {
+    masterLoading.value = false
+  }
+}
+
+function openMasterCreate(): void {
+  editingMasterId.value = null
+  Object.assign(masterForm, { vendorName: '', taxNo: '', bankAccount: '', contact: '', phone: '', remark: '' })
+  masterDialogVisible.value = true
+}
+
+function openMasterEdit(row: VendorMaster): void {
+  editingMasterId.value = row.id
+  Object.assign(masterForm, {
+    vendorName: row.vendorName, taxNo: row.taxNo || '', bankAccount: row.bankAccount || '',
+    contact: row.contact || '', phone: row.phone || '', remark: row.remark || '',
+  })
+  masterDialogVisible.value = true
+}
+
+async function handleMasterSave(): Promise<void> {
+  if (!masterForm.vendorName.trim()) {
+    ElMessage.warning('请填写供应商名称')
+    return
+  }
+  masterSaving.value = true
+  try {
+    if (editingMasterId.value) {
+      await updateVendor({ id: editingMasterId.value, ...masterForm })
+      ElMessage.success('已保存')
+    } else {
+      await createVendor({ ...masterForm })
+      ElMessage.success('已新增')
+    }
+    masterDialogVisible.value = false
+    fetchMasters()
+  } finally {
+    masterSaving.value = false
+  }
+}
+
+async function handleMasterDelete(row: VendorMaster): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`确定删除供应商「${row.vendorName}」吗？已有付款记录的供应商无法删除。`, '删除确认', { type: 'warning' })
+  } catch { return }
+  await deleteVendor(row.id)
+  ElMessage.success('已删除')
+  fetchMasters()
 }
 
 function openInvoiceCreate(): void {
@@ -425,6 +492,9 @@ onMounted(async () => {
   try {
     projectOptions.value = await projectOptionsApi()
   } catch { /* 项目选项失败不影响列表 */ }
+  try {
+    vendorOptions.value = await listVendors()
+  } catch { /* 供应商选项失败不影响登记 */ }
 })
 </script>
 
@@ -537,6 +607,34 @@ onMounted(async () => {
             </el-table-column>
           </el-table>
         </el-tab-pane>
+
+        <el-tab-pane label="供应商" name="masters" lazy>
+          <div class="table-toolbar">
+            <span class="section-title">供应商主数据（付款登记时下拉选择，统一统计口径）</span>
+            <el-button v-if="canAdd" type="primary" @click="openMasterCreate">新增供应商</el-button>
+          </div>
+          <el-table v-loading="masterLoading" :data="masterRows" border stripe>
+            <el-table-column prop="vendorName" label="供应商名称" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="taxNo" label="税号" min-width="140" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.taxNo || '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="bankAccount" label="银行账号" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.bankAccount || '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="contact" label="联系人" width="100">
+              <template #default="{ row }">{{ row.contact || '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="phone" label="电话" width="120">
+              <template #default="{ row }">{{ row.phone || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="130" fixed="right">
+              <template #default="{ row }">
+                <el-button v-if="canEdit" link type="primary" size="small" @click="openMasterEdit(row)">编辑</el-button>
+                <el-button v-if="canDelete" link type="danger" size="small" @click="handleMasterDelete(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
 
@@ -544,7 +642,10 @@ onMounted(async () => {
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑付款' : '登记付款'" width="560px">
       <el-form label-width="110px">
         <el-form-item label="供应商" required>
-          <el-input v-model="form.vendorName" maxlength="200" placeholder="收款方名称" />
+          <el-select v-model="form.vendorName" filterable allow-create default-first-option
+            placeholder="选择供应商或直接输入新名称" style="width: 100%">
+            <el-option v-for="v in vendorOptions" :key="v.id" :label="v.vendorName" :value="v.vendorName" />
+          </el-select>
         </el-form-item>
         <el-form-item label="摘要">
           <el-input v-model="form.summary" maxlength="300" placeholder="付款事由，如 购买办公用品" />
@@ -710,6 +811,34 @@ onMounted(async () => {
         <el-button type="primary" @click="handleWriteOff">核销</el-button>
       </template>
     </el-dialog>
+
+  <!-- 供应商主数据 -->
+  <el-dialog v-model="masterDialogVisible" :title="editingMasterId ? '编辑供应商' : '新增供应商'" width="520px">
+    <el-form label-width="90px">
+      <el-form-item label="名称" required>
+        <el-input v-model="masterForm.vendorName" maxlength="200" />
+      </el-form-item>
+      <el-form-item label="税号">
+        <el-input v-model="masterForm.taxNo" maxlength="60" />
+      </el-form-item>
+      <el-form-item label="银行账号">
+        <el-input v-model="masterForm.bankAccount" maxlength="80" />
+      </el-form-item>
+      <el-form-item label="联系人">
+        <el-input v-model="masterForm.contact" maxlength="60" />
+      </el-form-item>
+      <el-form-item label="电话">
+        <el-input v-model="masterForm.phone" maxlength="40" />
+      </el-form-item>
+      <el-form-item label="备注">
+        <el-input v-model="masterForm.remark" maxlength="200" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="masterDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="masterSaving" @click="handleMasterSave">保存</el-button>
+    </template>
+  </el-dialog>
 
   <el-dialog v-model="recycleVisible" title="回收站（已删除的付款单）" width="640px">
     <el-table v-loading="recycleLoading" :data="recycleRows" border size="small" max-height="420">

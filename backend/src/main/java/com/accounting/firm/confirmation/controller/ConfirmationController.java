@@ -62,6 +62,37 @@ public class ConfirmationController {
         return ApiResult.success(confirmationService.pageConfirmations(current, size, status, type, keyword, projectId));
     }
 
+    /** 函证台账导出行（审计底稿用，全量按登记时间倒序） */
+    @PreAuthorize("hasAuthority('business:confirmation:list')")
+    @GetMapping("/export-rows")
+    public ApiResult<List<java.util.Map<String, Object>>> exportRows() {
+        List<java.util.Map<String, Object>> rows = new java.util.ArrayList<>();
+        for (Confirmation c : confirmationService.lambdaQuery()
+                .orderByDesc(Confirmation::getCreateTime).list()) {
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("confirmationNo", c.getConfirmationNo());
+            row.put("targetUnit", c.getTargetUnit());
+            row.put("type", c.getType());
+            row.put("method", c.getConfirmationMethod());
+            row.put("projectName", c.getProjectName());
+            row.put("statusLabel", switch (c.getStatus() == null ? 0 : c.getStatus()) {
+                case 1 -> "已发出";
+                case 2 -> "已回函";
+                case 3 -> "已作废";
+                default -> "未发出";
+            });
+            row.put("sentDate", c.getSentDate());
+            row.put("sendTrackingNo", c.getSendTrackingNo());
+            row.put("confirmedDate", c.getConfirmedDate());
+            row.put("replyTrackingNo", c.getReplyTrackingNo());
+            row.put("hasReply", Boolean.TRUE.equals(c.getHasReply()) ? "是" : "否");
+            row.put("createBy", c.getCreateBy());
+            row.put("createTime", c.getCreateTime() == null ? "" : c.getCreateTime().toLocalDate().toString());
+            rows.add(row);
+        }
+        return ApiResult.success(rows);
+    }
+
     /** 登记函证 */
     @AuditLog("登记函证")
     @PreAuthorize("hasAuthority('business:confirmation:add')")

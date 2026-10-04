@@ -46,6 +46,7 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
     private final com.accounting.firm.vendor.mapper.VendorInvoiceMapper vendorInvoiceMapper;
     private final SupabaseStorageService storageService;
     private final DataScopeService dataScopeService;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
     private final com.accounting.firm.project.mapper.ProjectMapper projectMapper;
     private final com.accounting.firm.contract.mapper.ContractMapper contractMapper;
 
@@ -109,7 +110,6 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Long create(VendorPayment request, SecurityUser currentUser) {
         validateAmount(request);
         VendorPayment payment = new VendorPayment();
@@ -118,8 +118,21 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
         payment.setStatus(0);
         payment.setCreateBy(currentUser.getUsername());
         payment.setCreatorName(currentUser.getNickname() != null ? currentUser.getNickname() : currentUser.getUsername());
-        save(payment);
-        return payment.getId();
+        // 并发兜底：撞唯一键后 PG 事务即中止，必须在事务外重取单号重试
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return transactionTemplate.execute(tx -> {
+                    save(payment);
+                    return payment.getId();
+                });
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                if (attempt >= 3) {
+                    throw e;
+                }
+                payment.setId(null);
+                payment.setPaymentNo(generateNo());
+            }
+        }
     }
 
     @Override

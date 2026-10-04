@@ -20,4 +20,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // 大依赖单独分包，减小首屏 chunk
+        manualChunks: {
+          echarts: ['echarts'],
+          xlsx: ['xlsx'],
+          jspdf: ['jspdf'],
+        },
+      },
+    },
+  },
 })

@@ -3,6 +3,7 @@ package com.accounting.firm.reimbursement.mapper;
 import com.accounting.firm.reimbursement.dto.ReimbursementExportVO;
 import com.accounting.firm.reimbursement.entity.Reimbursement;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -25,6 +26,23 @@ public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
 
     @Update("UPDATE reimbursement SET deleted = 0 WHERE id = #{id}")
     int restoreById(@Param("id") Long id);
+
+    /** 回收站超过保留期的单据（供彻底清除） */
+    @Select("""
+            SELECT * FROM reimbursement
+            WHERE deleted = 1 AND update_time < #{cutoff}
+            ORDER BY id
+            """)
+    List<Reimbursement> selectExpiredDeleted(@Param("cutoff") java.time.LocalDateTime cutoff);
+
+    /** 彻底清除（物理删除，仅限已软删且过保留期的行） */
+    @Delete("""
+            <script>
+            DELETE FROM reimbursement WHERE deleted = 1 AND id IN
+            <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </script>
+            """)
+    int purgeByIds(@Param("ids") List<Long> ids);
 
     /** 当日最大编号（含已软删除行：软删行仍占用唯一键，max 若剔除会导致新单号撞号） */
     @Select("SELECT MAX(reimbursement_no) FROM reimbursement WHERE reimbursement_no LIKE CONCAT(#{prefix}, '%')")

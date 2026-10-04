@@ -24,9 +24,11 @@ public class AiSettingController {
 
     @GetMapping
     public ApiResult<Map<String, Object>> get() {
+        String key = appSettingService.get(AppSettingService.KEY_API_KEY);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("baseUrl", appSettingService.get(AppSettingService.KEY_BASE_URL));
-        data.put("apiKey", appSettingService.get(AppSettingService.KEY_API_KEY));
+        // 脱敏：只回末 4 位，完整 Key 不出后端
+        data.put("apiKeyMasked", key == null || key.isBlank() ? "" : "****" + key.substring(Math.max(0, key.length() - 4)));
         data.put("model", appSettingService.get(AppSettingService.KEY_MODEL));
         data.put("configured", appSettingService.aiConfigured());
         return ApiResult.success(data);
@@ -36,7 +38,11 @@ public class AiSettingController {
     public ApiResult<Void> save(@RequestBody Map<String, String> body,
                                 @AuthenticationPrincipal SecurityUser currentUser) {
         appSettingService.save(AppSettingService.KEY_BASE_URL, trim(body.get("baseUrl")), currentUser.getUsername());
-        appSettingService.save(AppSettingService.KEY_API_KEY, trim(body.get("apiKey")), currentUser.getUsername());
+        // apiKey 留空 = 保持原 Key 不变
+        String apiKey = trim(body.get("apiKey"));
+        if (apiKey != null && !apiKey.isBlank()) {
+            appSettingService.save(AppSettingService.KEY_API_KEY, apiKey, currentUser.getUsername());
+        }
         appSettingService.save(AppSettingService.KEY_MODEL, trim(body.get("model")), currentUser.getUsername());
         return ApiResult.success();
     }

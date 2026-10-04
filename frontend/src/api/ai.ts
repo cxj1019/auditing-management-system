@@ -1,6 +1,6 @@
 import request from './request'
 
-export interface AiSettings { baseUrl?: string; apiKey?: string; model?: string; configured?: boolean }
+export interface AiSettings { baseUrl?: string; apiKey?: string; apiKeyMasked?: string; model?: string; configured?: boolean }
 
 export function getAiSettings(): Promise<AiSettings> {
   return request.get('/system/ai-settings')

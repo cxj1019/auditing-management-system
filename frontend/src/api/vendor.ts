@@ -164,3 +164,24 @@ export function listRecycleVendorPayments(): Promise<VendorPaymentItem[]> {
 export function restoreVendorPayment(id: number): Promise<void> {
   return request.put(`/vendor-payments/recycle/${id}/restore`)
 }
+
+
+// ---------- 供应商主数据 ----------
+
+export interface VendorMasterItem { id: number; vendorName: string; taxNo?: string; bankAccount?: string; contact?: string; phone?: string; remark?: string }
+
+export function listVendors(keyword?: string): Promise<VendorMasterItem[]> {
+  return request.get('/vendors', { params: keyword ? { keyword } : {} })
+}
+
+export function createVendor(data: Partial<VendorMasterItem>): Promise<number> {
+  return request.post('/vendors', data)
+}
+
+export function updateVendor(data: Partial<VendorMasterItem> & { id: number }): Promise<void> {
+  return request.put('/vendors', data)
+}
+
+export function deleteVendor(id: number): Promise<void> {
+  return request.delete(`/vendors/${id}`)
+}

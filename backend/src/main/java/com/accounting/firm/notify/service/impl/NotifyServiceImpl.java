@@ -77,6 +77,7 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
     private final ContractMapper contractMapper;
     private final SysUserMapper sysUserMapper;
     private final SysMenuMapper sysMenuMapper;
+    private final com.accounting.firm.common.mail.MailService mailService;
     private final SysRoleMapper sysRoleMapper;
     private final SysRoleMenuMapper sysRoleMenuMapper;
     private final SysUserRoleMapper sysUserRoleMapper;
@@ -268,6 +269,20 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
         notification.setDedupDate(today);
         notification.setCreateTime(LocalDateTime.now());
         save(notification);
+        pushMailQuietly(userId, title, content);
+    }
+
+    /** 站内通知附带邮件提醒：用户名即邮箱（含 @）且邮件通道启用时异步发送 */
+    private void pushMailQuietly(Long userId, String title, String content) {
+        try {
+            SysUser user = sysUserMapper.selectById(userId);
+            if (user == null || user.getUsername() == null || !user.getUsername().contains("@")) {
+                return;
+            }
+            mailService.sendAsync(user.getUsername(), "【审计管理系统】" + title, content);
+        } catch (Exception e) {
+            log.warn("邮件提醒派发失败 userId={}: {}", userId, e.getMessage());
+        }
     }
 
     @Override
