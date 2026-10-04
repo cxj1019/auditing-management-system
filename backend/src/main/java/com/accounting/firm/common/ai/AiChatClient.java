@@ -90,7 +90,7 @@ public class AiChatClient {
             } catch (com.accounting.firm.common.exception.BusinessException e) {
                 if (e == lastError) continue; // 已在上方计入重试
                 throw e;
-            } catch (java.net.http.HttpTimeoutException | java.io.IOException e) {
+            } catch (java.io.IOException e) {
                 lastError = new com.accounting.firm.common.exception.BusinessException("调用 AI 接口失败：" + e.getMessage());
                 if (attempt < 3) {
                     try {
