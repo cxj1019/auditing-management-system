@@ -93,8 +93,9 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             copyFields(request, schedule);
             save(schedule);
         }
-        mailParticipants("新增", request.getTitle(), request.getScheduleDate(),
-                timeRange(request.getStartTime(), request.getEndTime()), request.getProjectId(), targetUserIds, currentUser);
+        List<Schedule> created = list(new LambdaQueryWrapper<Schedule>()
+                .eq(Schedule::getEventId, eventId));
+        mailParticipants("新增", created.get(0), created, currentUser);
     }
 
     @Override
@@ -117,10 +118,13 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         }
         requireValidProject(request.getProjectId());
         copyFields(request, schedule);
+        schedule.setUpdateBy(currentUser.getUsername());
+        schedule.setUpdateTime(java.time.LocalDateTime.now());
         updateById(schedule);
-        mailParticipants("修改", schedule.getTitle(), schedule.getScheduleDate(),
-                timeRange(schedule.getStartTime(), schedule.getEndTime()), schedule.getProjectId(),
-                List.of(schedule.getUserId()), currentUser);
+        List<Schedule> updatedGroup = StringUtils.hasText(schedule.getEventId())
+                ? list(new LambdaQueryWrapper<Schedule>().eq(Schedule::getEventId, schedule.getEventId()))
+                : List.of(schedule);
+        mailParticipants("修改", schedule, updatedGroup, currentUser);
     }
 
     /** 删除整个日程（含全部参与人员），所有人可操作 */
@@ -134,11 +138,9 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         List<Schedule> rows = StringUtils.hasText(schedule.getEventId())
                 ? list(new LambdaQueryWrapper<Schedule>().eq(Schedule::getEventId, schedule.getEventId()))
                 : List.of(schedule);
-        List<Long> participantIds = rows.stream().map(Schedule::getUserId).distinct().toList();
         Schedule first = rows.get(0);
         remove(new LambdaQueryWrapper<Schedule>().eq(Schedule::getEventId, first.getEventId()));
-        mailParticipants("删除", first.getTitle(), first.getScheduleDate(),
-                timeRange(first.getStartTime(), first.getEndTime()), first.getProjectId(), participantIds, currentUser);
+        mailParticipants("删除", first, rows, currentUser);
     }
 
     /** 退出日程：仅移除指定参与人员自己的这条 */
@@ -312,6 +314,16 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             Map<Long, String> nameMap = memberNames(userIds);
             list.forEach(s -> s.setCreatorName(nameMap.get(s.getUserId())));
         }
+        // 填充最后更新人姓名（按登录账号 → 昵称）
+        List<String> updaterNames = list.stream()
+                .map(Schedule::getUpdateBy).filter(StringUtils::hasText).distinct().toList();
+        if (!updaterNames.isEmpty()) {
+            Map<String, String> updaterMap = sysUserMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                            .in(SysUser::getUsername, updaterNames)).stream()
+                    .collect(Collectors.toMap(SysUser::getUsername,
+                            u -> StringUtils.hasText(u.getNickname()) ? u.getNickname() : u.getUsername()));
+            list.forEach(s -> s.setUpdaterName(updaterMap.get(s.getUpdateBy())));
+        }
         // 填充预约设备名称
         List<Long> resourceIds = list.stream()
                 .map(Schedule::getResourceId).filter(java.util.Objects::nonNull).distinct().toList();
@@ -363,27 +375,31 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         schedule.setType(request.getType());
     }
 
-    /** 日程新增/修改/删除时邮件提醒参与人员（账号名即邮箱才收，操作人本人不收） */
-    private void mailParticipants(String action, String title, LocalDate date, String timeRange,
-                                  Long projectId, List<Long> userIds, SecurityUser operator) {
+    /** 日程新增/修改/删除时邮件提醒参与人员（账号名即邮箱才收，操作人本人不收），版式参照 Garoon */
+    private void mailParticipants(String action, Schedule displayRow, List<Schedule> rows, SecurityUser operator) {
         try {
-            if (userIds == null || userIds.isEmpty()) {
+            if (displayRow == null || rows == null || rows.isEmpty()) {
                 return;
             }
+            Schedule first = displayRow;
+            List<Long> userIds = rows.stream().map(Schedule::getUserId).distinct().toList();
             List<SysUser> users = sysUserMapper.selectBatchIds(userIds);
-            String projectName = "";
-            if (projectId != null) {
-                Project project = projectMapper.selectById(projectId);
+            String attendees = users.stream()
+                    .map(u -> StringUtils.hasText(u.getNickname()) ? u.getNickname() : u.getUsername())
+                    .collect(Collectors.joining(", "));
+            String title = StringUtils.hasText(first.getTitle()) ? first.getTitle() : "(无标题)";
+            StringBuilder body = new StringBuilder();
+            body.append("日期时间：").append(formatWhen(first)).append('\n');
+            body.append("日程：").append(title).append('\n');
+            body.append("参加者：").append(attendees).append('\n');
+            body.append("备注：").append(StringUtils.hasText(first.getDescription()) ? first.getDescription() : "");
+            if (first.getProjectId() != null) {
+                Project project = projectMapper.selectById(first.getProjectId());
                 if (project != null) {
-                    projectName = project.getName();
+                    body.append('\n').append("项目：").append(project.getName());
                 }
             }
-            String operatorName = StringUtils.hasText(operator.getNickname()) ? operator.getNickname() : operator.getUsername();
-            String body = action + "：" + (StringUtils.hasText(title) ? title : "(无标题)")
-                    + "\n日期：" + date
-                    + (StringUtils.hasText(timeRange) ? "\n时间：" + timeRange : "")
-                    + (StringUtils.hasText(projectName) ? "\n项目：" + projectName : "")
-                    + "\n操作人：" + operatorName;
+            String subject = "[" + action + "] " + title;
             for (SysUser u : users) {
                 if (u.getUsername() == null || !u.getUsername().contains("@")) {
                     continue;
@@ -391,17 +407,35 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
                 if (u.getUsername().equals(operator.getUsername())) {
                     continue;
                 }
-                mailService.sendAsync(u.getUsername(), "【审计管理系统】日程" + action + "提醒", body);
+                mailService.sendAsync(u.getUsername(), subject, body.toString());
             }
         } catch (Exception e) {
             log.warn("日程邮件提醒派发失败: {}", e.getMessage());
         }
     }
 
-    private String timeRange(String startTime, String endTime) {
-        if (!StringUtils.hasText(startTime) && !StringUtils.hasText(endTime)) {
+    /** 日期时间行：跨天为「起 ~ 止」，单天为「日期 时段」，无时间视为全天 */
+    private String formatWhen(Schedule s) {
+        String startDay = formatDay(s.getScheduleDate());
+        boolean multiDay = s.getEndDate() != null && !s.getEndDate().equals(s.getScheduleDate());
+        if (multiDay) {
+            String endDay = formatDay(s.getEndDate());
+            String st = StringUtils.hasText(s.getStartTime()) ? s.getStartTime() : "";
+            String et = StringUtils.hasText(s.getEndTime()) ? s.getEndTime() : "";
+            return startDay + " " + st + " ～ " + endDay + " " + et;
+        }
+        if (!StringUtils.hasText(s.getStartTime()) || !StringUtils.hasText(s.getEndTime())) {
+            return startDay + " （全天）";
+        }
+        return startDay + " " + s.getStartTime() + " ～ " + s.getEndTime();
+    }
+
+    private String formatDay(LocalDate date) {
+        if (date == null) {
             return "";
         }
-        return (startTime == null ? "" : startTime) + " - " + (endTime == null ? "" : endTime);
+        String[] week = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
+        return date.getYear() + "年" + date.getMonthValue() + "月" + date.getDayOfMonth() + "日（"
+                + week[date.getDayOfWeek().getValue() - 1] + "）";
     }
 }

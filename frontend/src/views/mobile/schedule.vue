@@ -310,7 +310,8 @@ onMounted(() => {
         <div class="ms-detail-row"><span class="ms-detail-label">项目</span>{{ detail.projectName || '—' }}</div>
         <div class="ms-detail-row"><span class="ms-detail-label">设备</span>{{ detail.resourceName || '—' }}</div>
         <div class="ms-detail-row"><span class="ms-detail-label">说明</span>{{ detail.description || '—' }}</div>
-        <div class="ms-detail-row"><span class="ms-detail-label">创建人</span>{{ detail.creatorName || '—' }}</div>
+        <div class="ms-detail-row"><span class="ms-detail-label">登记人</span>{{ detail.creatorName || '—' }}<template v-if="detail.createTime"> {{ detail.createTime.slice(0, 16).replace('T', ' ') }}</template></div>
+        <div class="ms-detail-row"><span class="ms-detail-label">更新人</span>{{ detail.updaterName || detail.updateBy || '—' }}<template v-if="detail.updateTime"> {{ detail.updateTime.slice(0, 16).replace('T', ' ') }}</template></div>
       </template>
     </el-dialog>
 

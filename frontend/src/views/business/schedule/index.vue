@@ -449,9 +449,27 @@ function openCreate(userId?: number, date?: string, time?: string): void {
   dialogVisible.value = true
 }
 
+const editingRow = ref<ScheduleItem | null>(null)
+
+/** 按登录账号解析昵称（登记人/更新人显示用） */
+function nicknameByUsername(username?: string): string {
+  if (!username) return ''
+  const u = userOptions.value.find((x) => x.username === username)
+  return u ? (u.nickname || u.username) : username
+}
+
+function fmtAuditTime(t?: string): string {
+  if (!t) return ''
+  const d = new Date(t)
+  if (Number.isNaN(d.getTime())) return t
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}年${p(d.getMonth() + 1)}月${p(d.getDate())}日 ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 function openEdit(row: ScheduleItem): void {
   isEdit.value = true
   editingId.value = row.id
+  editingRow.value = row
   editingIsMine.value = row.userId === userStore.userId
   Object.assign(form, {
     userIds: [row.userId], projectId: row.projectId, title: row.title,
@@ -930,6 +948,10 @@ onMounted(() => {
           <el-input v-model="form.description" type="textarea" :rows="2" placeholder="备注" />
         </el-form-item>
       </el-form>
+      <div v-if="isEdit && editingRow" class="schedule-audit">
+        登记人 {{ nicknameByUsername(editingRow.createBy) || editingRow.creatorName || '—' }} {{ fmtAuditTime(editingRow.createTime) }}
+        ｜ 更新人 {{ nicknameByUsername(editingRow.updateBy) || editingRow.updaterName || '—' }} {{ fmtAuditTime(editingRow.updateTime) }}
+      </div>
       <template #footer>
         <el-button v-if="isEdit && editingIsMine" link type="warning" @click="handleExit">退出日程</el-button>
         <el-button v-if="isEdit" link type="danger" @click="handleDeleteEvent">删除日程</el-button>
@@ -941,6 +963,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.schedule-audit {
+  margin: 4px 0 8px;
+  color: #9ca3af;
+  font-size: 12px;
+  padding: 0 4px;
+}
 .schedule-full { padding: 0; }
 .schedule-full :deep(.el-card) { border: none; border-radius: 0; box-shadow: none; }
 .schedule-full :deep(.el-card__body) { padding: 0; }

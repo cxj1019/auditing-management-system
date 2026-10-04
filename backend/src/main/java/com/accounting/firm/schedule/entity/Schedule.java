@@ -64,6 +64,10 @@ public class Schedule implements Serializable {
     @TableField(exist = false)
     private String creatorName;
 
+    /** 非数据库字段：最后更新人姓名（联表填充） */
+    @TableField(exist = false)
+    private String updaterName;
+
     /** 非数据库字段：项目名称（联表填充） */
     @TableField(exist = false)
     private String projectName;

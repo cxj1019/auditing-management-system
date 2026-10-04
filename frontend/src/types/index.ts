@@ -269,6 +269,9 @@ export interface ScheduleItem {
   resourceName?: string
   createBy?: string
   createTime?: string
+  updateBy?: string
+  updateTime?: string
+  updaterName?: string
 }
 
 /** 日程创建/编辑请求 */
