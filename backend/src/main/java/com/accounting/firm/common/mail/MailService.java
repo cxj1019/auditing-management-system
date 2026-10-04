@@ -9,7 +9,11 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import jakarta.mail.internet.MimeMessage;
+import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,8 +33,16 @@ public class MailService {
     public static final String KEY_FROM = "mail_from";
     public static final String KEY_ENABLED = "mail_enabled";
     public static final String KEY_SSL = "mail_ssl";
+    /** 发送渠道：smtp（默认）| resend */
+    public static final String KEY_CHANNEL = "mail_channel";
+    public static final String KEY_RESEND_KEY = "mail_resend_key";
+    private static final String RESEND_ENDPOINT = "https://api.resend.com/emails";
 
     private final AppSettingService appSettingService;
+
+    private final java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(20))
+            .build();
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "mail-notify");
@@ -38,13 +50,21 @@ public class MailService {
         return t;
     });
 
-    /** 邮件通道是否可用（已启用且配置完整） */
+    /** 邮件通道是否可用（已启用且所选渠道配置完整） */
     public boolean ready() {
-        return "true".equalsIgnoreCase(appSettingService.get(KEY_ENABLED))
-                && notBlank(appSettingService.get(KEY_HOST))
+        if (!"true".equalsIgnoreCase(appSettingService.get(KEY_ENABLED)) || !notBlank(appSettingService.get(KEY_FROM))) {
+            return false;
+        }
+        if (isResendChannel()) {
+            return notBlank(appSettingService.get(KEY_RESEND_KEY));
+        }
+        return notBlank(appSettingService.get(KEY_HOST))
                 && notBlank(appSettingService.get(KEY_USERNAME))
-                && notBlank(appSettingService.get(KEY_PASSWORD))
-                && notBlank(appSettingService.get(KEY_FROM));
+                && notBlank(appSettingService.get(KEY_PASSWORD));
+    }
+
+    private boolean isResendChannel() {
+        return "resend".equalsIgnoreCase(appSettingService.get(KEY_CHANNEL));
     }
 
     /** 异步发送；任何失败只记日志，绝不影响业务流程 */
@@ -67,6 +87,45 @@ public class MailService {
     }
 
     private void doSend(String to, String subject, String content) throws Exception {
+        if (isResendChannel()) {
+            sendViaResend(to, subject, content);
+            return;
+        }
+        sendViaSmtp(to, subject, content);
+    }
+
+    /** Resend HTTP API：https://api.resend.com/emails */
+    private void sendViaResend(String to, String subject, String content) throws Exception {
+        String apiKey = appSettingService.get(KEY_RESEND_KEY);
+        String from = appSettingService.get(KEY_FROM);
+        StringBuilder json = new StringBuilder();
+        json.append("{\"from\":\"").append(escapeJson(from)).append("\",\"to\":[\"")
+                .append(escapeJson(to)).append("\"],\"subject\":\"").append(escapeJson(subject))
+                .append("\",\"text\":\"").append(escapeJson(content)).append("\"}");
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(RESEND_ENDPOINT))
+                .timeout(Duration.ofSeconds(30))
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json.toString()))
+                .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() / 100 != 2) {
+            throw new IllegalStateException("Resend 返回 " + response.statusCode() + "：" + truncate(response.body(), 200));
+        }
+        log.info("邮件已发送(Resend) to={} subject={}", to, subject);
+    }
+
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "").replace("\n", "\\n");
+    }
+
+    private static String truncate(String s, int max) {
+        return s != null && s.length() > max ? s.substring(0, max) : s;
+    }
+
+    private void sendViaSmtp(String to, String subject, String content) throws Exception {
         JavaMailSenderImpl sender = new JavaMailSenderImpl();
         sender.setHost(appSettingService.get(KEY_HOST));
         String port = appSettingService.get(KEY_PORT);

@@ -17,16 +17,18 @@ const backupHistory = ref<BackupRow[]>([])
 const backupLoading = ref(false)
 
 // ---- 邮件通知设置 ----
-interface MailSettings { host?: string; port?: string; username?: string; passwordMasked?: string; from?: string; enabled?: boolean; ready?: boolean }
-const mailForm = reactive({ host: '', port: '465', username: '', password: '', from: '', enabled: false })
+interface MailSettings { channel?: string; resendKeyMasked?: string; host?: string; port?: string; username?: string; passwordMasked?: string; from?: string; enabled?: boolean; ready?: boolean; sslEnabled?: boolean }
+const mailForm = reactive({ channel: 'smtp', resendKey: '', host: '', port: '465', username: '', password: '', from: '', enabled: false })
 const mailReady = ref(false)
 const mailSaving = ref(false)
 const mailTesting = ref(false)
 const testMailTo = ref('')
+const resendMasked = ref('')
 
 async function fetchMailSettings(): Promise<void> {
   try {
     const d = await request.get('/system/mail-settings') as unknown as MailSettings
+    mailForm.channel = d.channel || 'smtp'
     mailForm.host = d.host || ''
     mailForm.port = d.port || '465'
     mailForm.username = d.username || ''
@@ -34,17 +36,28 @@ async function fetchMailSettings(): Promise<void> {
     mailForm.from = d.from || ''
     mailForm.enabled = !!d.enabled
     mailReady.value = !!d.ready
+    resendMasked.value = d.resendKeyMasked || ''
   } catch { /* 无权限时不显示 */ }
 }
 
 async function handleSaveMail(): Promise<void> {
-  if (!mailForm.host.trim() || !mailForm.username.trim() || !mailForm.from.trim()) {
+  if (mailForm.channel === 'resend') {
+    if (!mailForm.resendKey.trim() && !resendMasked.value) {
+      ElMessage.warning('请填写 Resend API Key')
+      return
+    }
+    if (!mailForm.from.trim()) {
+      ElMessage.warning('请填写发件人')
+      return
+    }
+  } else if (!mailForm.host.trim() || !mailForm.username.trim() || !mailForm.from.trim()) {
     ElMessage.warning('请填写 SMTP 服务器、账号和发件人')
     return
   }
   mailSaving.value = true
   try {
     await request.put('/system/mail-settings', {
+      channel: mailForm.channel, resendKey: mailForm.resendKey,
       host: mailForm.host, port: mailForm.port, username: mailForm.username,
       password: mailForm.password, from: mailForm.from, enabled: mailForm.enabled ? 'true' : 'false',
     })
@@ -190,21 +203,37 @@ onMounted(() => {
         <el-form-item label="启用">
           <el-switch v-model="mailForm.enabled" />
         </el-form-item>
-        <el-form-item label="SMTP 服务器" required>
-          <el-input v-model="mailForm.host" placeholder="如 smtp.exmail.qq.com" />
+        <el-form-item label="发送渠道">
+          <el-radio-group v-model="mailForm.channel">
+            <el-radio-button value="resend">Resend API</el-radio-button>
+            <el-radio-button value="smtp">SMTP</el-radio-button>
+          </el-radio-group>
         </el-form-item>
-        <el-form-item label="端口">
-          <el-input v-model="mailForm.port" placeholder="SSL 端口一般为 465" />
-        </el-form-item>
-        <el-form-item label="SMTP 账号" required>
-          <el-input v-model="mailForm.username" placeholder="发件邮箱账号" />
-        </el-form-item>
-        <el-form-item label="SMTP 密码">
-          <el-input v-model="mailForm.password" type="password" show-password placeholder="已保存则留空保持不变" />
-        </el-form-item>
-        <el-form-item label="发件人" required>
-          <el-input v-model="mailForm.from" placeholder="与 SMTP 账号一致，如 system@firm.cn" />
-        </el-form-item>
+        <template v-if="mailForm.channel === 'resend'">
+          <el-form-item label="API Key" required>
+            <el-input v-model="mailForm.resendKey" type="password" show-password :placeholder="resendMasked ? `已保存 ${resendMasked}，留空保持不变` : 're_...'" />
+          </el-form-item>
+          <el-form-item label="发件人" required>
+            <el-input v-model="mailForm.from" placeholder="如 onboarding@resend.dev（验证域名后可改为你自己的域名邮箱）" />
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="SMTP 服务器" required>
+            <el-input v-model="mailForm.host" placeholder="如 smtp.exmail.qq.com" />
+          </el-form-item>
+          <el-form-item label="端口">
+            <el-input v-model="mailForm.port" placeholder="SSL 端口一般为 465" />
+          </el-form-item>
+          <el-form-item label="SMTP 账号" required>
+            <el-input v-model="mailForm.username" placeholder="发件邮箱账号" />
+          </el-form-item>
+          <el-form-item label="SMTP 密码">
+            <el-input v-model="mailForm.password" type="password" show-password placeholder="已保存则留空保持不变" />
+          </el-form-item>
+          <el-form-item label="发件人" required>
+            <el-input v-model="mailForm.from" placeholder="与 SMTP 账号一致，如 system@firm.cn" />
+          </el-form-item>
+        </template>
         <el-form-item>
           <el-button type="primary" :loading="mailSaving" @click="handleSaveMail">保存</el-button>
           <el-input v-model="testMailTo" placeholder="测试收件邮箱" style="width: 220px; margin-left: 12px" />

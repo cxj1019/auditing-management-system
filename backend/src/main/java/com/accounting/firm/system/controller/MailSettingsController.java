@@ -34,6 +34,10 @@ public class MailSettingsController {
         data.put("username", appSettingService.get(MailService.KEY_USERNAME));
         data.put("passwordMasked", pwd == null || pwd.isBlank() ? "" : "******");
         data.put("from", appSettingService.get(MailService.KEY_FROM));
+        data.put("channel", appSettingService.get(MailService.KEY_CHANNEL) == null ? "smtp"
+                : appSettingService.get(MailService.KEY_CHANNEL));
+        String resendKey = appSettingService.get(MailService.KEY_RESEND_KEY);
+        data.put("resendKeyMasked", resendKey == null || resendKey.isBlank() ? "" : "****" + resendKey.substring(Math.max(0, resendKey.length() - 4)));
         data.put("enabled", "true".equalsIgnoreCase(appSettingService.get(MailService.KEY_ENABLED)));
         // 未配置视为启用 SSL（465 直连），与 MailService.asBool 一致
         String ssl = appSettingService.get(MailService.KEY_SSL);
@@ -55,6 +59,14 @@ public class MailSettingsController {
         appSettingService.save(MailService.KEY_FROM, trim(body.get("from")), currentUser.getUsername());
         appSettingService.save(MailService.KEY_ENABLED,
                 "true".equalsIgnoreCase(trim(body.get("enabled"))) ? "true" : "false", currentUser.getUsername());
+        String channel = trim(body.get("channel"));
+        if (channel != null && !channel.isBlank()) {
+            appSettingService.save(MailService.KEY_CHANNEL, channel, currentUser.getUsername());
+        }
+        String resendKey = trim(body.get("resendKey"));
+        if (resendKey != null && !resendKey.isBlank()) {
+            appSettingService.save(MailService.KEY_RESEND_KEY, resendKey, currentUser.getUsername());
+        }
         String ssl = trim(body.get("ssl"));
         if (ssl != null && !ssl.isBlank()) {
             appSettingService.save(MailService.KEY_SSL, ssl, currentUser.getUsername());
