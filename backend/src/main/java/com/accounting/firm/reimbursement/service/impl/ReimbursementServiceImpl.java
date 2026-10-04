@@ -64,7 +64,8 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
                                     com.accounting.firm.common.storage.SupabaseStorageService storageService,
                                     DataScopeService dataScopeService,
                                     com.accounting.firm.notify.service.NotifyService notifyService,
-                                    SysUserMapper sysUserMapper) {
+                                    SysUserMapper sysUserMapper,
+                                    org.springframework.transaction.support.TransactionTemplate transactionTemplate) {
         this.itemMapper = itemMapper;
         this.projectMapper = projectMapper;
         this.attachmentMapper = attachmentMapper;
@@ -72,6 +73,7 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         this.dataScopeService = dataScopeService;
         this.notifyService = notifyService;
         this.sysUserMapper = sysUserMapper;
+        this.transactionTemplate = transactionTemplate;
     }
 
     @Override

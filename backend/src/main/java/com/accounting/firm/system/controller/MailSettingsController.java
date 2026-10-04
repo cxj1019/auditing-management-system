@@ -72,4 +72,8 @@ public class MailSettingsController {
             return ApiResult.error(500, "发送失败：" + e.getMessage());
         }
     }
+
+    private String trim(String s) {
+        return s == null ? null : s.trim();
+    }
 }
