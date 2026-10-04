@@ -28,6 +28,7 @@ public class MailService {
     public static final String KEY_PASSWORD = "mail_password";
     public static final String KEY_FROM = "mail_from";
     public static final String KEY_ENABLED = "mail_enabled";
+    public static final String KEY_SSL = "mail_ssl";
 
     private final AppSettingService appSettingService;
 
@@ -76,7 +77,7 @@ public class MailService {
         Properties props = sender.getJavaMailProperties();
         props.put("mail.transport.protocol", "smtp");
         props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.ssl.enable", "true");
+        props.put("mail.smtp.ssl.enable", String.valueOf(asBool(appSettingService.get(KEY_SSL))));
         props.put("mail.smtp.connectiontimeout", "10000");
         props.put("mail.smtp.timeout", "15000");
 
@@ -92,6 +93,14 @@ public class MailService {
 
     private static boolean notBlank(String s) {
         return s != null && !s.isBlank();
+    }
+
+    /** 未配置时默认启用 SSL（465 直连）；测试/明文场景可显式设为 false */
+    private static boolean asBool(String v) {
+        if (v == null || v.isBlank()) {
+            return true;
+        }
+        return "true".equalsIgnoreCase(v.trim());
     }
 
     @PreDestroy

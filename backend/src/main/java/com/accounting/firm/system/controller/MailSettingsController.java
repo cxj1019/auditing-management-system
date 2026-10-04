@@ -35,6 +35,9 @@ public class MailSettingsController {
         data.put("passwordMasked", pwd == null || pwd.isBlank() ? "" : "******");
         data.put("from", appSettingService.get(MailService.KEY_FROM));
         data.put("enabled", "true".equalsIgnoreCase(appSettingService.get(MailService.KEY_ENABLED)));
+        // 未配置视为启用 SSL（465 直连），与 MailService.asBool 一致
+        String ssl = appSettingService.get(MailService.KEY_SSL);
+        data.put("sslEnabled", ssl == null || ssl.isBlank() || "true".equalsIgnoreCase(ssl.trim()));
         data.put("ready", mailService.ready());
         return ApiResult.success(data);
     }
@@ -52,6 +55,10 @@ public class MailSettingsController {
         appSettingService.save(MailService.KEY_FROM, trim(body.get("from")), currentUser.getUsername());
         appSettingService.save(MailService.KEY_ENABLED,
                 "true".equalsIgnoreCase(trim(body.get("enabled"))) ? "true" : "false", currentUser.getUsername());
+        String ssl = trim(body.get("ssl"));
+        if (ssl != null && !ssl.isBlank()) {
+            appSettingService.save(MailService.KEY_SSL, ssl, currentUser.getUsername());
+        }
         return ApiResult.success();
     }
 

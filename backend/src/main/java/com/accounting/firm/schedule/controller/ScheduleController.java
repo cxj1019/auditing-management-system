@@ -61,8 +61,8 @@ public class ScheduleController {
     @AuditLog
     @PreAuthorize("hasAuthority('business:schedule:delete')")
     @DeleteMapping("/{id}")
-    public ApiResult<Void> delete(@PathVariable Long id) {
-        scheduleService.deleteEvent(id);
+    public ApiResult<Void> delete(@PathVariable Long id, @AuthenticationPrincipal SecurityUser currentUser) {
+        scheduleService.deleteEvent(id, currentUser);
         return ApiResult.success();
     }
 

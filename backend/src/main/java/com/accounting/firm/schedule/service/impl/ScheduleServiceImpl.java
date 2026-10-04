@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> implements ScheduleService {
 
     private final ProjectMapper projectMapper;
@@ -41,6 +42,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
     private final ScheduleResourceMapper scheduleResourceMapper;
     private final ScheduleLockMapper scheduleLockMapper;
     private final DataScopeService dataScopeService;
+    private final com.accounting.firm.common.mail.MailService mailService;
 
     @Override
     public List<ScheduleResource> listResources() {
@@ -91,6 +93,8 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             copyFields(request, schedule);
             save(schedule);
         }
+        mailParticipants("新增", request.getTitle(), request.getScheduleDate(),
+                timeRange(request.getStartTime(), request.getEndTime()), request.getProjectId(), targetUserIds, currentUser);
     }
 
     @Override
@@ -114,21 +118,27 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         requireValidProject(request.getProjectId());
         copyFields(request, schedule);
         updateById(schedule);
+        mailParticipants("修改", schedule.getTitle(), schedule.getScheduleDate(),
+                timeRange(schedule.getStartTime(), schedule.getEndTime()), schedule.getProjectId(),
+                List.of(schedule.getUserId()), currentUser);
     }
 
     /** 删除整个日程（含全部参与人员），所有人可操作 */
     @Override
-    public void deleteEvent(Long id) {
+    public void deleteEvent(Long id, SecurityUser currentUser) {
         Schedule schedule = getById(id);
         if (schedule == null) {
             throw new BusinessException("日程不存在");
         }
         requireNotLocked(schedule.getScheduleDate());
-        if (StringUtils.hasText(schedule.getEventId())) {
-            remove(new LambdaQueryWrapper<Schedule>().eq(Schedule::getEventId, schedule.getEventId()));
-        } else {
-            removeById(id);
-        }
+        List<Schedule> rows = StringUtils.hasText(schedule.getEventId())
+                ? list(new LambdaQueryWrapper<Schedule>().eq(Schedule::getEventId, schedule.getEventId()))
+                : List.of(schedule);
+        List<Long> participantIds = rows.stream().map(Schedule::getUserId).distinct().toList();
+        Schedule first = rows.get(0);
+        remove(new LambdaQueryWrapper<Schedule>().eq(Schedule::getEventId, first.getEventId()));
+        mailParticipants("删除", first.getTitle(), first.getScheduleDate(),
+                timeRange(first.getStartTime(), first.getEndTime()), first.getProjectId(), participantIds, currentUser);
     }
 
     /** 退出日程：仅移除指定参与人员自己的这条 */
@@ -137,8 +147,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         Schedule schedule = getById(id);
         if (schedule == null) {
             throw new BusinessException("日程不存在");
-        }
-        removeById(id);
+        }        removeById(id);
     }
 
     @Override
@@ -352,5 +361,47 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         schedule.setEndTime(request.getEndTime());
         schedule.setHours(request.getHours() != null ? request.getHours() : java.math.BigDecimal.ZERO);
         schedule.setType(request.getType());
+    }
+
+    /** 日程新增/修改/删除时邮件提醒参与人员（账号名即邮箱才收，操作人本人不收） */
+    private void mailParticipants(String action, String title, LocalDate date, String timeRange,
+                                  Long projectId, List<Long> userIds, SecurityUser operator) {
+        try {
+            if (userIds == null || userIds.isEmpty()) {
+                return;
+            }
+            List<SysUser> users = sysUserMapper.selectBatchIds(userIds);
+            String projectName = "";
+            if (projectId != null) {
+                Project project = projectMapper.selectById(projectId);
+                if (project != null) {
+                    projectName = project.getName();
+                }
+            }
+            String operatorName = StringUtils.hasText(operator.getNickname()) ? operator.getNickname() : operator.getUsername();
+            String body = action + "：" + (StringUtils.hasText(title) ? title : "(无标题)")
+                    + "\n日期：" + date
+                    + (StringUtils.hasText(timeRange) ? "\n时间：" + timeRange : "")
+                    + (StringUtils.hasText(projectName) ? "\n项目：" + projectName : "")
+                    + "\n操作人：" + operatorName;
+            for (SysUser u : users) {
+                if (u.getUsername() == null || !u.getUsername().contains("@")) {
+                    continue;
+                }
+                if (u.getUsername().equals(operator.getUsername())) {
+                    continue;
+                }
+                mailService.sendAsync(u.getUsername(), "【审计管理系统】日程" + action + "提醒", body);
+            }
+        } catch (Exception e) {
+            log.warn("日程邮件提醒派发失败: {}", e.getMessage());
+        }
+    }
+
+    private String timeRange(String startTime, String endTime) {
+        if (!StringUtils.hasText(startTime) && !StringUtils.hasText(endTime)) {
+            return "";
+        }
+        return (startTime == null ? "" : startTime) + " - " + (endTime == null ? "" : endTime);
     }
 }

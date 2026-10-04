@@ -41,7 +41,7 @@ public interface ScheduleService extends IService<Schedule> {
     void updateSchedule(Long id, ScheduleRequest request, SecurityUser currentUser);
 
     /** 删除整个日程（含全部参与人员），所有人可操作 */
-    void deleteEvent(Long id);
+    void deleteEvent(Long id, com.accounting.firm.common.security.SecurityUser currentUser);
 
     /** 退出日程：仅移除指定参与人员自己的这条 */
     void exitEvent(Long id);
