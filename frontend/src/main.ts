@@ -35,3 +35,12 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 app.directive('permission', permissionDirective)
 
 app.mount('#app')
+
+// PWA：生产环境注册 Service Worker（添加到主屏幕 + 离线壳）
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* 注册失败不影响使用 */
+    })
+  })
+}

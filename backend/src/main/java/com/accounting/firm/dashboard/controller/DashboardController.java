@@ -61,6 +61,7 @@ public class DashboardController {
     private final ProjectMapper projectMapper;
     private final CostAnalysisMapper costAnalysisMapper;
     private final DataScopeService dataScopeService;
+    private final com.accounting.firm.client.mapper.ClientMapper clientMapper;
 
     @GetMapping
     public ApiResult<DashboardVO> dashboard(@AuthenticationPrincipal SecurityUser currentUser) {
@@ -153,6 +154,69 @@ public class DashboardController {
         }).toList());
 
         return ApiResult.success(vo);
+    }
+
+    /** 应收账龄：已开票未回清的发票按开票日期分层（回款按发票聚合） */
+    @GetMapping("/receivable-aging")
+    public ApiResult<java.util.Map<String, Object>> receivableAging() {
+        LocalDate today = LocalDate.now();
+        var invoices = invoiceMapper.selectList(new LambdaQueryWrapper<Invoice>()
+                .eq(Invoice::getStatus, InvoiceStatus.ISSUED.getCode()));
+        java.util.Map<Long, BigDecimal> paidByInvoice = new java.util.LinkedHashMap<>();
+        for (ContractPayment p : paymentMapper.selectList(null)) {
+            if (p.getInvoiceId() != null && p.getAmount() != null) {
+                paidByInvoice.merge(p.getInvoiceId(), p.getAmount(), BigDecimal::add);
+            }
+        }
+        var contracts = contractMapper.selectList(null).stream()
+                .collect(Collectors.toMap(Contract::getId, c -> c));
+        var projects = projectMapper.selectList(null).stream()
+                .collect(Collectors.toMap(Project::getId, p -> p));
+        var clients = clientMapper.selectList(null).stream()
+                .collect(Collectors.toMap(com.accounting.firm.client.entity.Client::getId, c -> c));
+
+        List<java.util.Map<String, Object>> rows = new ArrayList<>();
+        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal b30 = BigDecimal.ZERO, b60 = BigDecimal.ZERO, b90 = BigDecimal.ZERO, b90p = BigDecimal.ZERO;
+        for (Invoice inv : invoices) {
+            BigDecimal paid = paidByInvoice.getOrDefault(inv.getId(), BigDecimal.ZERO);
+            BigDecimal amount = inv.getAmount() == null ? BigDecimal.ZERO : inv.getAmount();
+            BigDecimal outstanding = amount.subtract(paid);
+            if (outstanding.compareTo(new BigDecimal("0.005")) <= 0) {
+                continue;
+            }
+            long days = inv.getInvoiceDate() == null ? 0
+                    : java.time.temporal.ChronoUnit.DAYS.between(inv.getInvoiceDate(), today);
+            String bucket = days <= 30 ? "0-30天" : days <= 60 ? "31-60天" : days <= 90 ? "61-90天" : "90天以上";
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("invoiceNo", inv.getInvoiceNo());
+            row.put("clientName", inv.getClientId() != null && clients.containsKey(inv.getClientId())
+                    ? clients.get(inv.getClientId()).getClientName() : "");
+            Contract contract = inv.getContractId() != null ? contracts.get(inv.getContractId()) : null;
+            row.put("projectName", contract != null && contract.getProjectId() != null
+                    && projects.containsKey(contract.getProjectId())
+                    ? projects.get(contract.getProjectId()).getName() : "");
+            row.put("invoiceDate", inv.getInvoiceDate());
+            row.put("amount", amount);
+            row.put("paid", paid);
+            row.put("outstanding", outstanding);
+            row.put("days", days);
+            row.put("bucket", bucket);
+            rows.add(row);
+            total = total.add(outstanding);
+            switch (bucket) {
+                case "0-30天" -> b30 = b30.add(outstanding);
+                case "31-60天" -> b60 = b60.add(outstanding);
+                case "61-90天" -> b90 = b90.add(outstanding);
+                default -> b90p = b90p.add(outstanding);
+            }
+        }
+        rows.sort(Comparator.comparingLong(r -> -((Number) r.get("days")).longValue()));
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("rows", rows);
+        data.put("summary", java.util.Map.of(
+                "total", total, "b30", b30, "b60", b60, "b90", b90, "b90plus", b90p));
+        return ApiResult.success(data);
     }
 
     /** 数据体检：待补全/待处理的数据项(管理员与合伙人体视角含全局项,员工仅本人草稿) */

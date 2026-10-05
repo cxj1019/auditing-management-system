@@ -29,3 +29,6 @@ Thumbs.db
 deploy-env.txt
 test-results/
 tools_patch/
+
+# 运维脚本（含数据库连接串，不入库）
+tools/

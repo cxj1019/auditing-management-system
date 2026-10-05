@@ -5,7 +5,40 @@ import * as echarts from 'echarts'
 import { useUserStore } from '@/stores/user'
 import { getDashboard, getMonthlyTrend, getHealthCheck } from '@/api/dashboard'
 import { getExpenseStats } from '@/api/cost'
+import request from '@/api/request'
+import * as XLSX from 'xlsx'
 import type { DashboardSummary, MonthlyTrendItem, HealthCheckItem } from '@/types'
+
+// ---------- 应收账龄 ----------
+interface AgingRow { invoiceNo: string; clientName: string; projectName: string; invoiceDate: string; amount: number; paid: number; outstanding: number; days: number; bucket: string }
+interface AgingSummary { total: number; b30: number; b60: number; b90: number; b90plus: number }
+const agingRows = ref<AgingRow[]>([])
+const agingSummary = ref<AgingSummary | null>(null)
+const agingExporting = ref(false)
+
+async function fetchAging(): Promise<void> {
+  try {
+    const d = await request.get('/dashboard/receivable-aging') as unknown as { rows: AgingRow[]; summary: AgingSummary }
+    agingRows.value = d.rows || []
+    agingSummary.value = d.summary || null
+  } catch { /* 无权限/失败不影响看板 */ }
+}
+
+function exportAging(): void {
+  agingExporting.value = true
+  try {
+    const header = ['发票号', '客户', '项目', '开票日期', '账龄天数', '账龄分层', '含税额', '已回款', '未回款']
+    const aoa = [header, ...agingRows.value.map((r) => [
+      r.invoiceNo, r.clientName, r.projectName, r.invoiceDate, r.days, r.bucket, r.amount, r.paid, r.outstanding,
+    ])]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '应收账龄')
+    XLSX.writeFile(wb, `应收账龄_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  } finally {
+    agingExporting.value = false
+  }
+}
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -96,6 +129,7 @@ onMounted(async () => {
   loading.value = true
   try {
     summary.value = await getDashboard()
+    fetchAging()
     if (canViewFinance.value) {
       try {
         healthItems.value = await getHealthCheck()
@@ -223,6 +257,48 @@ onMounted(async () => {
               <div class="receivable-value" style="color: #f56c6c">{{ money(summary?.receivable?.outstanding) }}</div>
               <div class="receivable-label">未核销（元）</div>
             </div>
+          </div>
+        </el-card>
+
+        <!-- 应收账龄 -->
+        <el-card shadow="never" class="block-card">
+          <template #header>
+            <div class="block-header">
+              <span>应收账龄（未回清发票）</span>
+              <el-button link type="primary" :loading="agingExporting" @click="exportAging">导出</el-button>
+            </div>
+          </template>
+          <div class="receivable-grid">
+            <div class="receivable-cell">
+              <div class="receivable-value">{{ money(agingSummary?.b30) }}</div>
+              <div class="receivable-label">0-30天（元）</div>
+            </div>
+            <div class="receivable-cell">
+              <div class="receivable-value" style="color: #d97706">{{ money(agingSummary?.b60) }}</div>
+              <div class="receivable-label">31-60天（元）</div>
+            </div>
+            <div class="receivable-cell">
+              <div class="receivable-value" style="color: #f56c6c">{{ money(agingSummary?.b90) }}</div>
+              <div class="receivable-label">61-90天（元）</div>
+            </div>
+            <div class="receivable-cell">
+              <div class="receivable-value" style="color: #dc2626">{{ money(agingSummary?.b90plus) }}</div>
+              <div class="receivable-label">90天以上（元）</div>
+            </div>
+          </div>
+          <el-table v-if="agingRows.length" :data="agingRows.slice(0, 8)" size="small" border style="margin-top: 10px">
+            <el-table-column prop="invoiceNo" label="发票号" min-width="120" />
+            <el-table-column prop="clientName" label="客户" min-width="120" show-overflow-tooltip />
+            <el-table-column prop="invoiceDate" label="开票日" width="100" />
+            <el-table-column prop="days" label="账龄" width="70" align="center">
+              <template #default="{ row }">{{ row.days }} 天</template>
+            </el-table-column>
+            <el-table-column label="未回款" min-width="100" align="right">
+              <template #default="{ row }">{{ money(row.outstanding) }}</template>
+            </el-table-column>
+          </el-table>
+          <div v-if="agingRows.length > 8" style="color: #9ca3af; font-size: 12px; margin-top: 6px">
+            共 {{ agingRows.length }} 张，仅显示最旧 8 张，导出查看全部
           </div>
         </el-card>
 

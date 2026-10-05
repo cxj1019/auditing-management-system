@@ -97,6 +97,7 @@ public class MailService {
         doSend(to, "【审计管理系统】邮件通知测试", "如果您收到这封邮件，说明邮件通知配置成功。");
     }
 
+    /** 按渠道分发：Resend HTTP API 或 SMTP */
     private void doSend(String to, String subject, String content) throws Exception {
         if (isResendChannel()) {
             sendViaResend(to, subject, content);
@@ -105,14 +106,39 @@ public class MailService {
         sendViaSmtp(to, subject, content);
     }
 
-    /** Resend HTTP API：https://api.resend.com/emails */
+    /** 同步发送带单个附件的邮件（备份/月报投递用），失败抛出由调用方处理 */
+    public void sendWithAttachment(String to, String subject, String content,
+                                   String attachmentName, byte[] attachment) throws Exception {
+        if (!ready() || to == null || !to.contains("@")) {
+            throw new IllegalStateException("邮件通道未就绪或收件人无效");
+        }
+        if (isResendChannel()) {
+            sendViaResend(to, subject, content, attachmentName, attachment);
+        } else {
+            sendViaSmtp(to, subject, content, attachmentName, attachment);
+        }
+    }
+
+    /** Resend HTTP API：https://api.resend.com/emails（无附件） */
     private void sendViaResend(String to, String subject, String content) throws Exception {
+        sendViaResend(to, subject, content, null, null);
+    }
+
+    /** Resend HTTP API：https://api.resend.com/emails */
+    private void sendViaResend(String to, String subject, String content,
+                               String attachmentName, byte[] attachment) throws Exception {
         String apiKey = appSettingService.get(KEY_RESEND_KEY);
         String from = appSettingService.get(KEY_FROM);
         StringBuilder json = new StringBuilder();
         json.append("{\"from\":\"").append(escapeJson(from)).append("\",\"to\":[\"")
                 .append(escapeJson(to)).append("\"],\"subject\":\"").append(escapeJson(subject))
-                .append("\",\"text\":\"").append(escapeJson(content)).append("\"}");
+                .append("\",\"text\":\"").append(escapeJson(content)).append("\"");
+        if (attachment != null) {
+            json.append(",\"attachments\":[{\"filename\":\"").append(escapeJson(attachmentName))
+                    .append("\",\"content\":\"").append(java.util.Base64.getEncoder().encodeToString(attachment))
+                    .append("\"}]");
+        }
+        json.append("}");
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(RESEND_ENDPOINT))
                 .timeout(Duration.ofSeconds(30))
@@ -137,6 +163,11 @@ public class MailService {
     }
 
     private void sendViaSmtp(String to, String subject, String content) throws Exception {
+        sendViaSmtp(to, subject, content, null, null);
+    }
+
+    private void sendViaSmtp(String to, String subject, String content,
+                             String attachmentName, byte[] attachment) throws Exception {
         JavaMailSenderImpl sender = new JavaMailSenderImpl();
         sender.setHost(appSettingService.get(KEY_HOST));
         String port = appSettingService.get(KEY_PORT);
@@ -151,12 +182,17 @@ public class MailService {
         props.put("mail.smtp.connectiontimeout", "10000");
         props.put("mail.smtp.timeout", "15000");
 
+        boolean multipart = attachment != null;
         MimeMessage message = sender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
+        MimeMessageHelper helper = new MimeMessageHelper(message, multipart, StandardCharsets.UTF_8.name());
         helper.setFrom(appSettingService.get(KEY_FROM));
         helper.setTo(to);
         helper.setSubject(subject);
         helper.setText(content, false);
+        if (multipart) {
+            helper.addAttachment(attachmentName,
+                    new org.springframework.core.io.ByteArrayResource(attachment));
+        }
         sender.send(message);
         log.info("邮件已发送 to={} subject={}", to, subject);
     }

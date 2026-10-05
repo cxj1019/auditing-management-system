@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAiSettings, saveAiSettings } from '@/api/ai'
 import request from '@/api/request'
 
@@ -157,10 +157,73 @@ async function handleSave(): Promise<void> {
   }
 }
 
+// ---- 备份邮箱（异地容灾）与月报 ----
+const backupMailTo = ref('')
+const backupMailSending = ref(false)
+const reportMonth = ref(new Date().toISOString().slice(0, 7))
+const reportMailTo = ref('')
+const reportDownloading = ref(false)
+const reportMailSending = ref(false)
+
+async function handleMailBackup(): Promise<void> {
+  try {
+    await ElMessageBox.confirm('将生成一份全新备份并把 ZIP 发送到配置邮箱，确认？', '发送备份', { type: 'info' })
+  } catch { return }
+  backupMailSending.value = true
+  try {
+    const cur = await request.get('/system/mail-settings') as unknown as Record<string, unknown>
+    await request.put('/system/mail-settings', { ...cur, backupMailTo: backupMailTo.value })
+    const msg = await request.post('/system/backup/mail-latest') as unknown as string
+    ElMessage.success(msg || '已发送')
+  } finally {
+    backupMailSending.value = false
+  }
+}
+
+function handleDownloadReport(): void {
+  if (!reportMonth.value) {
+    ElMessage.warning('请选择月份')
+    return
+  }
+  reportDownloading.value = true
+  try {
+    const link = document.createElement('a')
+    link.href = (import.meta.env.VITE_API_BASE || '/api') + `/system/report/monthly.xlsx?month=${reportMonth.value}`
+    link.click()
+  } finally {
+    reportDownloading.value = false
+  }
+}
+
+async function handleMailReport(): Promise<void> {
+  if (!reportMonth.value) {
+    ElMessage.warning('请选择月份')
+    return
+  }
+  reportMailSending.value = true
+  try {
+    const cur = await request.get('/system/mail-settings') as unknown as Record<string, unknown>
+    await request.put('/system/mail-settings', { ...cur, reportMailTo: reportMailTo.value })
+    const msg = await request.post(`/system/report/monthly/mail?month=${reportMonth.value}`) as unknown as string
+    ElMessage.success(msg || '已发送')
+  } finally {
+    reportMailSending.value = false
+  }
+}
+
+async function fetchMailTargets(): Promise<void> {
+  try {
+    const d = await request.get('/system/mail-settings') as unknown as { backupMailTo?: string; reportMailTo?: string }
+    backupMailTo.value = d.backupMailTo || ''
+    reportMailTo.value = d.reportMailTo || ''
+  } catch { /* 忽略 */ }
+}
+
 onMounted(() => {
       fetchSettings()
       fetchBackupHistory()
       fetchMailSettings()
+      fetchMailTargets()
     })
 </script>
 
@@ -272,6 +335,32 @@ onMounted(() => {
         <el-button size="small" :loading="cleanupRunning" @click="handleRetentionRun">立即执行保留策略清理</el-button>
         <span style="color: #9ca3af; font-size: 12px">审计日志保留 180 天；回收站单据保留 30 天后连同附件彻底清除（每日 02:40 自动）</span>
       </div>
+      <el-divider style="margin: 14px 0" />
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+        <span style="font-size: 13px; color: #374151">异地容灾：每周日 20:00 自动把最新备份 ZIP 发至</span>
+        <el-input v-model="backupMailTo" placeholder="接收备份的邮箱，如 you@gmail.com" style="width: 260px" size="small" />
+        <el-button size="small" type="primary" :loading="backupMailSending" @click="handleMailBackup">立即发送最新备份</el-button>
+        <span style="color: #9ca3af; font-size: 12px">保存设置后生效</span>
+      </div>
+    </el-card>
+
+    <el-card shadow="never" style="max-width: 680px; margin-top: 12px">
+      <template #header>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <span>月度经营月报（每月 1 日 08:00 自动发送上月）</span>
+        </div>
+      </template>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+        <el-date-picker v-model="reportMonth" type="month" placeholder="选择月份" value-format="YYYY-MM" style="width: 150px" />
+        <el-button size="small" :loading="reportDownloading" @click="handleDownloadReport">下载月报 Excel</el-button>
+        <span style="color: #9ca3af; font-size: 12px">发送至</span>
+        <el-input v-model="reportMailTo" placeholder="接收月报的邮箱" style="width: 260px" size="small" />
+        <el-button size="small" type="primary" :loading="reportMailSending" @click="handleMailReport">发送到邮箱</el-button>
+        <span style="color: #9ca3af; font-size: 12px">保存设置后生效</span>
+      </div>
+      <p style="margin: 10px 0 0; color: #9ca3af; font-size: 12px">
+        月报内容：当月回款（价税分离）/开票、报销与对公付款成本、工时、函证进度、应收账龄。
+      </p>
     </el-card>
   </div>
 </template>
