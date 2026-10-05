@@ -27,6 +27,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/index.vue'),
         meta: { title: '首页', icon: 'HomeFilled', perm: 'dashboard:view' },
       },
+      {
+        path: 'help',
+        name: 'Help',
+        component: () => import('@/views/help/index.vue'),
+        meta: { title: '使用指引' },
+      },
     ],
   },
   {
@@ -113,6 +119,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/mobile/more.vue'),
         meta: { title: '更多' },
       },
+      {
+        path: 'help',
+        name: 'MobileHelp',
+        component: () => import('@/views/mobile/help.vue'),
+        meta: { title: '使用指引' },
+      },
     ],
   },
   {
@@ -130,6 +142,7 @@ const router = createRouter({
 
 /** 手机端自动跳转映射：桌面路径 → 移动页（'/' 与 /dashboard 已由路由重定向到 /dashboard） */
 const MOBILE_REDIRECTS: Record<string, string> = {
+  '/help': '/m/help',
   '/': '/m/home',
   '/dashboard': '/m/home',
   '/business/reimbursement': '/m/bills',

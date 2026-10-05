@@ -215,10 +215,12 @@ async function handleChangePassword(): Promise<void> {
     </div>
 
     <div class="navbar-right">
+      <!-- 使用指引 -->
+      <el-icon class="help-entry" title="使用指引" @click="router.push('/help')"><QuestionFilled /></el-icon>
       <!-- 站内通知 -->
       <el-popover placement="bottom-end" :width="isMobile ? 290 : 380" trigger="click" @show="toggleNotif(true)">
         <template #reference>
-          <el-badge :value="unreadCount" :hidden="unreadCount <= 0" :max="99" class="notif-badge">
+          <el-badge :value="unreadCount" :hidden="unreadCount <= 0" :max="99" class="notif-badge" style="margin-left: 4px">
             <el-icon class="notif-bell"><Bell /></el-icon>
           </el-badge>
         </template>
@@ -319,6 +321,12 @@ async function handleChangePassword(): Promise<void> {
   font-size: 18px;
   color: #4b5563;
   cursor: pointer;
+}
+.help-entry {
+  font-size: 18px;
+  color: #4b5563;
+  cursor: pointer;
+  margin-right: 4px;
 }
 
 .notif-badge {

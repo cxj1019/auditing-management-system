@@ -29,6 +29,7 @@ const groups = [
       { label: '函证管理', icon: 'Memo', path: '/m/confirmations' },
       { label: '日程周板（滑动）', icon: 'Calendar', path: '/m/schedule' },
       { label: '汇率牌价', icon: 'Coin', path: '/m/fx' },
+      { label: '使用指引', icon: 'QuestionFilled', path: '/m/help' },
     ],
   },
   {
