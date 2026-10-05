@@ -617,6 +617,38 @@ async function handleBatchApprove(): Promise<void> {
   }
 }
 
+let batchRejecting = ref(false)
+
+async function handleBatchReject(): Promise<void> {
+  if (!selectedRows.value.length) {
+    ElMessage.warning('请先勾选待审批的报销单')
+    return
+  }
+  let reason = ''
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `批量驳回 ${selectedRows.value.length} 张报销单，请输入统一驳回理由（必填）`, '批量驳回', {
+        type: 'warning', inputPattern: /\S+/, inputErrorMessage: '驳回理由不能为空',
+        confirmButtonText: '驳回', cancelButtonText: '取消',
+      })
+    reason = value.trim()
+  } catch { return }
+  batchRejecting.value = true
+  let ok = 0
+  try {
+    for (const row of selectedRows.value) {
+      try {
+        await approveReimbursement(row.id, { action: 'reject', comment: reason })
+        ok++
+      } catch { /* 单张失败继续 */ }
+    }
+    ElMessage.success(`已驳回 ${ok}/${selectedRows.value.length} 张`)
+    fetchList()
+  } finally {
+    batchRejecting.value = false
+  }
+}
+
 // ---------- 回收站 ----------
 const recycleVisible = ref(false)
 const recycleLoading = ref(false)
@@ -667,6 +699,7 @@ onMounted(() => {
           <el-button type="primary" style="margin-left: 8px" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
           <el-button v-permission="'business:reimbursement:approve'" :disabled="!selectedRows.length" :loading="batchApproving" style="margin-left: 8px" @click="handleBatchApprove">批量批准（{{ selectedRows.length }}）</el-button>
+          <el-button v-permission="'business:reimbursement:approve'" :disabled="!selectedRows.length" :loading="batchRejecting" style="margin-left: 8px" @click="handleBatchReject">批量驳回（{{ selectedRows.length }}）</el-button>
           <el-button style="margin-left: 8px" @click="openRecycle">回收站</el-button>
         </div>
         <div>

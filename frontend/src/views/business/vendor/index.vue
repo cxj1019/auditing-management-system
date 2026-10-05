@@ -459,6 +459,69 @@ async function handleDownload(att: VendorAttachmentItem): Promise<void> {
   await downloadVendorAttachment(detail.value.id, att.id, att.fileName)
 }
 
+// ---------- 批量审批（仅待审批单） ----------
+const selectedRows = ref<VendorPaymentItem[]>([])
+const batchApproving = ref(false)
+const batchRejecting = ref(false)
+
+function handleSelectionChange(rows: VendorPaymentItem[]): void {
+  selectedRows.value = rows.filter((r) => r.status === 1)
+}
+
+async function handleBatchApprove(): Promise<void> {
+  if (!selectedRows.value.length) {
+    ElMessage.warning('请先勾选待审批的付款单')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`批量批准 ${selectedRows.value.length} 张付款单？`, '批量批准', { type: 'warning' })
+  } catch { return }
+  batchApproving.value = true
+  let ok = 0
+  try {
+    for (const row of selectedRows.value) {
+      try {
+        await approveVendorPayment(row.id, 'approve', '批量批准')
+        ok++
+      } catch { /* 单张失败继续 */ }
+    }
+    ElMessage.success(`已批准 ${ok}/${selectedRows.value.length} 张`)
+    fetchList()
+  } finally {
+    batchApproving.value = false
+  }
+}
+
+async function handleBatchReject(): Promise<void> {
+  if (!selectedRows.value.length) {
+    ElMessage.warning('请先勾选待审批的付款单')
+    return
+  }
+  let reason = ''
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `批量驳回 ${selectedRows.value.length} 张付款单，请输入统一驳回理由（必填）`, '批量驳回', {
+        type: 'warning', inputPattern: /\S+/, inputErrorMessage: '驳回理由不能为空',
+        confirmButtonText: '驳回', cancelButtonText: '取消',
+      })
+    reason = value.trim()
+  } catch { return }
+  batchRejecting.value = true
+  let ok = 0
+  try {
+    for (const row of selectedRows.value) {
+      try {
+        await approveVendorPayment(row.id, 'reject', reason)
+        ok++
+      } catch { /* 单张失败继续 */ }
+    }
+    ElMessage.success(`已驳回 ${ok}/${selectedRows.value.length} 张`)
+    fetchList()
+  } finally {
+    batchRejecting.value = false
+  }
+}
+
 // ---------- 回收站 ----------
 const recycleVisible = ref(false)
 const recycleLoading = ref(false)
@@ -513,12 +576,15 @@ onMounted(async () => {
           <el-button @click="handleReset">重置</el-button>
         </div>
         <div>
+          <el-button v-if="canApprove" :disabled="!selectedRows.length" :loading="batchApproving" style="margin-right: 8px" @click="handleBatchApprove">批量批准（{{ selectedRows.length }}）</el-button>
+          <el-button v-if="canApprove" :disabled="!selectedRows.length" :loading="batchRejecting" style="margin-right: 8px" @click="handleBatchReject">批量驳回（{{ selectedRows.length }}）</el-button>
           <el-button style="margin-right: 8px" @click="openRecycle">回收站</el-button>
           <el-button v-if="canAdd" type="primary" @click="openCreate">登记付款</el-button>
         </div>
       </div>
 
-      <el-table v-loading="loading" :data="records" border stripe>
+      <el-table v-loading="loading" :data="records" border stripe @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="42" :selectable="(row: VendorPaymentItem) => row.status === 1" />
         <el-table-column prop="paymentNo" label="付款编号" min-width="140" />
         <el-table-column prop="vendorName" label="供应商" min-width="140" show-overflow-tooltip />
         <el-table-column prop="summary" label="摘要" min-width="150" show-overflow-tooltip />

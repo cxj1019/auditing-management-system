@@ -47,6 +47,8 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
     private final SupabaseStorageService storageService;
     private final DataScopeService dataScopeService;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+    private final com.accounting.firm.notify.service.NotifyService notifyService;
+    private final com.accounting.firm.system.mapper.SysUserMapper sysUserMapper;
     private final com.accounting.firm.project.mapper.ProjectMapper projectMapper;
     private final com.accounting.firm.contract.mapper.ContractMapper contractMapper;
 
@@ -260,6 +262,9 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
         if ("approve".equals(action)) {
             payment.setStatus(2);
         } else if ("reject".equals(action)) {
+            if (comment == null || comment.isBlank()) {
+                throw new BusinessException("驳回必须填写理由");
+            }
             payment.setStatus(3);
         } else {
             throw new BusinessException("非法的审批动作");
@@ -268,6 +273,18 @@ public class VendorPaymentServiceImpl extends ServiceImpl<VendorPaymentMapper, V
         payment.setApproveComment(comment);
         payment.setApproveTime(LocalDateTime.now());
         updateById(payment);
+        // 通知登记人审批结果（站内 + 邮件，含直达链接）
+        com.accounting.firm.system.entity.SysUser creator = sysUserMapper.selectOne(
+                new LambdaQueryWrapper<com.accounting.firm.system.entity.SysUser>()
+                        .eq(com.accounting.firm.system.entity.SysUser::getUsername, payment.getCreateBy()));
+        if (creator != null) {
+            String result = "approve".equals(action) ? "已批准" : "已驳回";
+            String content = "付款单 %s（%.2f 元）%s%s".formatted(
+                    payment.getPaymentNo(), payment.getAmount() == null ? 0 : payment.getAmount().doubleValue(),
+                    result, ("reject".equals(action) && comment != null) ? "，理由：" + comment : "");
+            notifyService.push(creator.getId(), "vendor_payment", payment.getId(), "/business/vendor",
+                    "对公付款审批结果", content);
+        }
     }
 
     @Override

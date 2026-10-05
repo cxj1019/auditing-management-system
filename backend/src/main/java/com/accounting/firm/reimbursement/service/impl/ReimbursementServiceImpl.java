@@ -372,6 +372,10 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
         if (finalReview && !currentUser.hasRole("admin") && !currentUser.hasRole("partner")) {
             throw new BusinessException("待终审单据仅合伙人或系统管理员可终审");
         }
+        if ("reject".equals(request.getAction())
+                && (request.getComment() == null || request.getComment().isBlank())) {
+            throw new BusinessException("驳回必须填写理由");
+        }
         ReimbursementStatus target = switch (request.getAction()) {
             case "approve" -> ReimbursementStatus.APPROVED;
             case "reject" -> ReimbursementStatus.REJECTED;

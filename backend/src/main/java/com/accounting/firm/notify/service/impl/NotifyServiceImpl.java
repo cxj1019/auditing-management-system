@@ -269,17 +269,19 @@ public class NotifyServiceImpl extends ServiceImpl<SysNotificationMapper, SysNot
         notification.setDedupDate(today);
         notification.setCreateTime(LocalDateTime.now());
         save(notification);
-        pushMailQuietly(userId, title, content);
+        pushMailQuietly(userId, title, content, path);
     }
 
-    /** 站内通知附带邮件提醒：用户名即邮箱（含 @）且邮件通道启用时异步发送 */
-    private void pushMailQuietly(Long userId, String title, String content) {
+    /** 站内通知附带邮件提醒：用户名即邮箱（含 @）且邮件通道启用时异步发送；正文附处理入口链接 */
+    private void pushMailQuietly(Long userId, String title, String content, String path) {
         try {
             SysUser user = sysUserMapper.selectById(userId);
             if (user == null || user.getUsername() == null || !user.getUsername().contains("@")) {
                 return;
             }
-            mailService.sendAsync(user.getUsername(), "【审计管理系统】" + title, content);
+            String link = mailService.link(path);
+            String mail = content + (link.isBlank() ? "" : "\n\n处理入口：" + link + " （登录后直达单据）");
+            mailService.sendAsync(user.getUsername(), "【审计管理系统】" + title, mail);
         } catch (Exception e) {
             log.warn("邮件提醒派发失败 userId={}: {}", userId, e.getMessage());
         }

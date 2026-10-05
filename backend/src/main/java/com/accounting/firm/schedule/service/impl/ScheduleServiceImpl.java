@@ -393,6 +393,10 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
             body.append("日程：").append(title).append('\n');
             body.append("参加者：").append(attendees).append('\n');
             body.append("备注：").append(StringUtils.hasText(first.getDescription()) ? first.getDescription() : "");
+            String link = mailService.link("/business/schedule");
+            if (!link.isBlank()) {
+                body.append("\n处理入口：").append(link);
+            }
             if (first.getProjectId() != null) {
                 Project project = projectMapper.selectById(first.getProjectId());
                 if (project != null) {

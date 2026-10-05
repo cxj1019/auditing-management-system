@@ -35,6 +35,8 @@ public class MailService {
     public static final String KEY_SSL = "mail_ssl";
     /** 发送渠道：smtp（默认）| resend */
     public static final String KEY_CHANNEL = "mail_channel";
+    /** 系统对外访问地址（邮件直达链接用），如 https://mytscpa.19851019.xyz */
+    public static final String KEY_BASE_URL = "app_base_url";
     public static final String KEY_RESEND_KEY = "mail_resend_key";
     private static final String RESEND_ENDPOINT = "https://api.resend.com/emails";
 
@@ -61,6 +63,15 @@ public class MailService {
         return notBlank(appSettingService.get(KEY_HOST))
                 && notBlank(appSettingService.get(KEY_USERNAME))
                 && notBlank(appSettingService.get(KEY_PASSWORD));
+    }
+
+    /** 邮件正文里的"处理入口"直达链接；未配置 base url 时返回空串 */
+    public String link(String path) {
+        String base = appSettingService.get(KEY_BASE_URL);
+        if (base == null || base.isBlank() || path == null || path.isBlank()) {
+            return "";
+        }
+        return base.replaceAll("/+$", "") + (path.startsWith("/") ? path : "/" + path);
     }
 
     private boolean isResendChannel() {
