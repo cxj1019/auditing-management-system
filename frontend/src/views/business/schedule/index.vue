@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listSchedules, createSchedule, updateSchedule, deleteSchedule, exitSchedule, getHoursSummary, listScheduleResources, getHoursMatrix, confirmHours, listLocks, lockMonth, unlockMonth } from '@/api/schedule'
+import { listSchedules, createSchedule, updateSchedule, deleteSchedule, exitSchedule, getHoursSummary, listScheduleResources, getHoursMatrix, confirmHours, listLocks, lockMonth, unlockMonth, listHolidays, addHoliday, deleteHoliday } from '@/api/schedule'
 import { projectOptions as projectOptionsApi } from '@/api/project'
 import { getUserOptions, getDepartmentOptions } from '@/api/user'
 import { useUserStore } from '@/stores/user'
-import { holidayOf, isHoliday, isMakeupWorkday } from '@/utils/holiday'
+import { holidayOf, isHoliday, isMakeupWorkday, setCustomHolidays } from '@/utils/holiday'
 import type { ScheduleItem, ScheduleRequest, UserOption, DepartmentItem } from '@/types'
 
 const userStore = useUserStore()
@@ -625,9 +625,55 @@ function onHoursTab(tab: string): void {
   if (tab === 'lock') fetchLocks()
 }
 
+// ---------- 节假日/调休（管理员维护，全员生效于休班角标） ----------
+interface HolidayItem { id: number; holidayDate: string; type: '休' | '班'; name?: string | null }
+const holidayYear = ref(new Date().getFullYear())
+const holidayRows = ref<HolidayItem[]>([])
+const holidayLoading = ref(false)
+const holidayForm = reactive({ holidayDate: '', type: '休' as '休' | '班', name: '' })
+
+function applyHolidays(): void {
+  // 后端定义覆盖内置数据（utils/holiday 的 CUSTOM 层）
+  setCustomHolidays(holidayRows.value)
+}
+
+async function fetchHolidays(): Promise<void> {
+  holidayLoading.value = true
+  try {
+    holidayRows.value = await listHolidays(holidayYear.value)
+    applyHolidays()
+  } finally {
+    holidayLoading.value = false
+  }
+}
+
+async function handleAddHoliday(): Promise<void> {
+  if (!holidayForm.holidayDate) {
+    ElMessage.warning('请选择日期')
+    return
+  }
+  await addHoliday({ ...holidayForm, name: holidayForm.name || undefined })
+  ElMessage.success('已添加')
+  holidayForm.holidayDate = ''
+  holidayForm.name = ''
+  fetchHolidays()
+}
+
+async function handleDeleteHoliday(row: HolidayItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`删除 ${row.holidayDate} 的${row.type}定义？`, '删除', { type: 'warning' })
+  } catch { return }
+  await deleteHoliday(row.id)
+  ElMessage.success('已删除')
+  fetchHolidays()
+}
+
+watch(holidayYear, () => fetchHolidays())
+
 onMounted(() => {
   fetchSchedules()
   loadOptions()
+  fetchHolidays()
   if (canViewHours.value) {
     fetchHoursSummary()
   }
@@ -857,6 +903,41 @@ onMounted(() => {
               >{{ m }} 已锁定</el-tag>
               <span v-if="!lockedMonths.length" style="color: #9ca3af; font-size: 13px">暂无锁定月份</span>
             </div>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="isAdmin" label="节假日/调休" name="holiday">
+            <div class="items-header">
+              <span class="section-title">节假日与调休定义（全局生效：周板/日视图显示 休/班 角标，优先于内置数据）</span>
+              <el-date-picker v-model="holidayYear" type="year" value-format="YYYY" format="YYYY年"
+                :clearable="false" style="width: 120px" @change="(v: string) => { holidayYear = Number(v || new Date().getFullYear()) }" />
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 10px; align-items: center">
+              <el-date-picker v-model="holidayForm.holidayDate" type="date" value-format="YYYY-MM-DD"
+                placeholder="日期" style="width: 150px" />
+              <el-radio-group v-model="holidayForm.type">
+                <el-radio-button value="休">休（放假）</el-radio-button>
+                <el-radio-button value="班">班（调休上班）</el-radio-button>
+              </el-radio-group>
+              <el-input v-model="holidayForm.name" placeholder="名称（如 国庆节），调休可不填" style="width: 220px" />
+              <el-button type="primary" @click="handleAddHoliday">添加</el-button>
+            </div>
+            <el-table v-loading="holidayLoading" :data="holidayRows" border size="small" max-height="320">
+              <el-table-column prop="holidayDate" label="日期" width="130" />
+              <el-table-column label="类型" width="80" align="center">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.type === '休' ? 'danger' : 'info'">{{ row.type }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="name" label="名称" min-width="140">
+                <template #default="{ row }">{{ row.name || '—' }}</template>
+              </el-table-column>
+              <el-table-column prop="createBy" label="创建人" min-width="140" show-overflow-tooltip />
+              <el-table-column label="操作" width="80" align="center">
+                <template #default="{ row }">
+                  <el-button link type="danger" size="small" @click="handleDeleteHoliday(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
           </el-tab-pane>
         </el-tabs>
       </div>

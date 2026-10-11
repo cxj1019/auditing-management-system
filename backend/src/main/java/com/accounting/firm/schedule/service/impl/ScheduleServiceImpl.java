@@ -42,6 +42,7 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
     private final ScheduleResourceMapper scheduleResourceMapper;
     private final ScheduleLockMapper scheduleLockMapper;
     private final DataScopeService dataScopeService;
+    private final com.accounting.firm.schedule.mapper.ScheduleHolidayMapper scheduleHolidayMapper;
     private final com.accounting.firm.common.mail.MailService mailService;
 
     @Override
@@ -416,6 +417,45 @@ public class ScheduleServiceImpl extends ServiceImpl<ScheduleMapper, Schedule> i
         } catch (Exception e) {
             log.warn("日程邮件提醒派发失败: {}", e.getMessage());
         }
+    }
+
+    // ---------- 节假日/调休（管理员定义） ----------
+
+    @Override
+    public List<com.accounting.firm.schedule.entity.ScheduleHoliday> listHolidays(int year) {
+        return scheduleHolidayMapper.selectList(new LambdaQueryWrapper<com.accounting.firm.schedule.entity.ScheduleHoliday>()
+                .ge(com.accounting.firm.schedule.entity.ScheduleHoliday::getHolidayDate, LocalDate.of(year, 1, 1))
+                .le(com.accounting.firm.schedule.entity.ScheduleHoliday::getHolidayDate, LocalDate.of(year, 12, 31))
+                .orderByAsc(com.accounting.firm.schedule.entity.ScheduleHoliday::getHolidayDate));
+    }
+
+    @Override
+    public void addHoliday(com.accounting.firm.schedule.entity.ScheduleHoliday holiday, com.accounting.firm.common.security.SecurityUser currentUser) {
+        if (!currentUser.hasRole("admin")) {
+            throw new BusinessException("仅管理员可以维护节假日");
+        }
+        if (holiday.getHolidayDate() == null) {
+            throw new BusinessException("日期不能为空");
+        }
+        if (!"休".equals(holiday.getType()) && !"班".equals(holiday.getType())) {
+            throw new BusinessException("类型必须为 休 或 班");
+        }
+        if (scheduleHolidayMapper.selectCount(new LambdaQueryWrapper<com.accounting.firm.schedule.entity.ScheduleHoliday>()
+                .eq(com.accounting.firm.schedule.entity.ScheduleHoliday::getHolidayDate, holiday.getHolidayDate())) > 0) {
+            throw new BusinessException("该日期已存在节假日/调休定义，请先删除");
+        }
+        holiday.setId(null);
+        holiday.setCreateBy(currentUser.getUsername());
+        holiday.setCreateTime(java.time.LocalDateTime.now());
+        scheduleHolidayMapper.insert(holiday);
+    }
+
+    @Override
+    public void deleteHoliday(Long id, com.accounting.firm.common.security.SecurityUser currentUser) {
+        if (!currentUser.hasRole("admin")) {
+            throw new BusinessException("仅管理员可以维护节假日");
+        }
+        scheduleHolidayMapper.deleteById(id);
     }
 
     /** 日期时间行：跨天为「起 ~ 止」，单天为「日期 时段」，无时间视为全天 */

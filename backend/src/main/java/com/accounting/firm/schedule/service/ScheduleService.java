@@ -43,6 +43,15 @@ public interface ScheduleService extends IService<Schedule> {
     /** 删除整个日程（含全部参与人员），所有人可操作 */
     void deleteEvent(Long id, com.accounting.firm.common.security.SecurityUser currentUser);
 
+    /** 某年的节假日/调休清单（所有能看日程的人可查） */
+    List<com.accounting.firm.schedule.entity.ScheduleHoliday> listHolidays(int year);
+
+    /** 新增节假日/调休（仅管理员） */
+    void addHoliday(com.accounting.firm.schedule.entity.ScheduleHoliday holiday, SecurityUser currentUser);
+
+    /** 删除节假日/调休（仅管理员） */
+    void deleteHoliday(Long id, SecurityUser currentUser);
+
     /** 退出日程：仅移除指定参与人员自己的这条 */
     void exitEvent(Long id);
 

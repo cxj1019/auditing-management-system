@@ -85,9 +85,30 @@ const DATA: Record<string, HolidayInfo> = {
   '2026-10-10': { type: '班' },
 }
 
-/** 某日期的节假日信息（无则 undefined） */
+// ---------- 管理员自定义节假日/调休（后端 schedule_holiday，优先于内置数据） ----------
+
+const CUSTOM: Record<string, HolidayInfo> = {}
+
+/** 用后端定义覆盖内置节假日（日程页加载时调用） */
+export function setCustomHolidays(items: { holidayDate: string; type: string; name?: string | null }[]): void {
+  for (const it of items || []) {
+    if (!it.holidayDate || (it.type !== '休' && it.type !== '班')) {
+      continue
+    }
+    CUSTOM[it.holidayDate] = { type: it.type, name: it.name || undefined }
+  }
+}
+
+/** 清空自定义（重新加载前调用） */
+export function clearCustomHolidays(): void {
+  for (const k of Object.keys(CUSTOM)) {
+    delete CUSTOM[k]
+  }
+}
+
+/** 某日期的节假日信息（管理员定义优先，其次内置数据） */
 export function holidayOf(date: string): HolidayInfo | undefined {
-  return DATA[date]
+  return CUSTOM[date] ?? DATA[date]
 }
 
 /** 是否法定休息日（普通周末不算） */

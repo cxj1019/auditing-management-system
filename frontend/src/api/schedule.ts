@@ -61,3 +61,19 @@ export function deleteSchedule(id: number): Promise<void> {
 export function exitSchedule(id: number): Promise<void> {
   return request.delete(`/schedules/${id}/exit`)
 }
+
+// ---------- 节假日/调休（管理员定义） ----------
+
+export interface ScheduleHolidayItem { id: number; holidayDate: string; type: '休' | '班'; name?: string | null; createBy?: string }
+
+export function listHolidays(year: number): Promise<ScheduleHolidayItem[]> {
+  return request.get('/schedules/holidays', { params: { year } })
+}
+
+export function addHoliday(data: { holidayDate: string; type: '休' | '班'; name?: string }): Promise<void> {
+  return request.post('/schedules/holidays', data)
+}
+
+export function deleteHoliday(id: number): Promise<void> {
+  return request.delete(`/schedules/holidays/${id}`)
+}

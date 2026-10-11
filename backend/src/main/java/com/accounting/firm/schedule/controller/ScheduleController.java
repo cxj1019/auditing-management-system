@@ -135,4 +135,27 @@ public class ScheduleController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         return ApiResult.success(scheduleService.hoursSummary(startDate, endDate));
     }
+
+    /** 某年节假日/调休清单（周板/月板休班角标用） */
+    @GetMapping("/holidays")
+    public ApiResult<List<com.accounting.firm.schedule.entity.ScheduleHoliday>> holidays(@RequestParam int year) {
+        return ApiResult.success(scheduleService.listHolidays(year));
+    }
+
+    /** 新增节假日/调休（仅管理员） */
+    @AuditLog("登记节假日")
+    @PostMapping("/holidays")
+    public ApiResult<Void> addHoliday(@RequestBody com.accounting.firm.schedule.entity.ScheduleHoliday holiday,
+                                      @AuthenticationPrincipal SecurityUser currentUser) {
+        scheduleService.addHoliday(holiday, currentUser);
+        return ApiResult.success();
+    }
+
+    /** 删除节假日/调休（仅管理员） */
+    @AuditLog("删除节假日")
+    @DeleteMapping("/holidays/{id}")
+    public ApiResult<Void> deleteHoliday(@PathVariable Long id, @AuthenticationPrincipal SecurityUser currentUser) {
+        scheduleService.deleteHoliday(id, currentUser);
+        return ApiResult.success();
+    }
 }
