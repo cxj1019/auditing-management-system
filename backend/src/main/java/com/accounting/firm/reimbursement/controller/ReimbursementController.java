@@ -91,6 +91,13 @@ public class ReimbursementController {
         return ApiResult.success(reimbursementService.createDraft(request, currentUser));
     }
 
+    /** 复制报销单为本人新草稿 */
+    @PreAuthorize("hasAuthority('business:reimbursement:add')")
+    @PostMapping("/{id}/copy")
+    public ApiResult<Long> copy(@PathVariable Long id, @AuthenticationPrincipal SecurityUser currentUser) {
+        return ApiResult.success(reimbursementService.copyDraft(id, currentUser));
+    }
+
     /** 更新草稿（替换明细行） */
     @AuditLog("编辑报销草稿")
     @PreAuthorize("hasAuthority('business:reimbursement:edit')")

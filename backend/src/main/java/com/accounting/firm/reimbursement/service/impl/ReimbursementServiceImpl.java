@@ -35,7 +35,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 报销服务实现：单头 + 明细行 + 生命周期 + 二级审批 + 财务环节
@@ -277,6 +279,8 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
                 throw new BusinessException("明细「%s」为增值税专用发票，必须填写税率".formatted(item.getCategory()));
             }
         }
+        // 发票号查重：同一发票号不允许在其他有效单据中使用（防重复报销）
+        checkInvoiceNumbersDuplicate(id, items);
         recalculateTotal(id);
         ReimbursementStatus current = ReimbursementStatus.of(bill.getStatus());
         current.submit();
@@ -526,6 +530,70 @@ public class ReimbursementServiceImpl extends ServiceImpl<ReimbursementMapper, R
                 requireValidProject(item.getProjectId());
             }
         }
+    }
+
+    /** 发票号查重：同一发票号不允许出现在其他有效单据（未删除、非已驳回）中，防止重复报销 */
+    private void checkInvoiceNumbersDuplicate(Long billId, List<ReimbursementItem> items) {
+        List<String> numbers = items.stream()
+                .map(ReimbursementItem::getInvoiceNumber)
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+        if (numbers.isEmpty()) {
+            return;
+        }
+        List<ReimbursementItem> conflicts = itemMapper.selectList(new LambdaQueryWrapper<ReimbursementItem>()
+                .in(ReimbursementItem::getInvoiceNumber, numbers)
+                .ne(billId != null, ReimbursementItem::getReimbursementId, billId));
+        if (conflicts.isEmpty()) {
+            return;
+        }
+        // 明细表无软删列：回查所属单据，剔除已删除与已驳回（驳回单重新编辑时自己的号不算冲突）
+        Map<Long, Reimbursement> bills = baseMapper.selectBatchIds(
+                        conflicts.stream().map(ReimbursementItem::getReimbursementId).distinct().toList())
+                .stream().collect(Collectors.toMap(Reimbursement::getId, b -> b));
+        for (ReimbursementItem item : conflicts) {
+            Reimbursement bill = bills.get(item.getReimbursementId());
+            if (bill == null || bill.getStatus() == null || bill.getStatus() == ReimbursementStatus.REJECTED.getCode()) {
+                continue;
+            }
+            throw new BusinessException("发票号 %s 已在单据 %s 中使用，请勿重复报销"
+                    .formatted(item.getInvoiceNumber(), bill.getReimbursementNo()));
+        }
+    }
+
+    /** 复制报销单为本人新草稿（附件不随复制，发票号原样保留——提交时查重兜底） */
+    @Override
+    public Long copyDraft(Long id, SecurityUser currentUser) {
+        Reimbursement source = getById(id);
+        if (source == null) {
+            throw new BusinessException("报销单不存在");
+        }
+        checkVisible(id, currentUser);
+        ReimbursementRequest request = new ReimbursementRequest();
+        request.setTitle(source.getTitle() + "（复制）");
+        request.setProjectId(source.getProjectId());
+        List<ReimbursementItemRequest> items = new java.util.ArrayList<>();
+        for (ReimbursementItem item : itemMapper.selectList(new LambdaQueryWrapper<ReimbursementItem>()
+                .eq(ReimbursementItem::getReimbursementId, id)
+                .orderByAsc(ReimbursementItem::getId))) {
+            ReimbursementItemRequest r = new ReimbursementItemRequest();
+            r.setCategory(item.getCategory());
+            r.setAmount(item.getAmount());
+            r.setExpenseDate(item.getExpenseDate());
+            r.setDescription(item.getDescription());
+            r.setInvoiceNumber(item.getInvoiceNumber());
+            r.setIsVatInvoice(item.getIsVatInvoice());
+            r.setInvoiceType(item.getInvoiceType());
+            r.setTaxRate(item.getTaxRate());
+            r.setTaxAmount(item.getTaxAmount());
+            r.setProjectId(item.getProjectId());
+            r.setBillable(item.getBillable());
+            items.add(r);
+        }
+        request.setItems(items);
+        return createDraft(request, currentUser);
     }
 
     /** 增量同步明细行：已保存行按 ID 更新、新行插入、缺失行删除；返回被移除的行 ID */

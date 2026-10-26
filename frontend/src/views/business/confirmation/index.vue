@@ -258,8 +258,20 @@ async function handleIntakeParse(): Promise<void> {
   intakeParsing.value = true
   try {
     const groups = await parseConfirmationIntake(intakeFile.value)
-    intakeGroups.value = groups
-    ElMessage.success(`识别出 ${groups.length} 份函证，请核对归集项目后确认`)
+    // 重试时保留用户已指定的项目（按页码重叠继承）与单位名（新识别为空/未识别时沿用旧值）
+    const prev = intakeGroups.value
+    const merged = groups.map((g) => {
+      const overlap = prev.find((p) => p.pages.some((pg) => g.pages.includes(pg)))
+      if (overlap) {
+        if (!g.projectId && overlap.projectId) g.projectId = overlap.projectId
+        if ((!g.unit || g.unit.startsWith('未识别')) && overlap.unit && !overlap.unit.startsWith('未识别')) {
+          g.unit = overlap.unit
+        }
+      }
+      return g
+    })
+    intakeGroups.value = merged
+    ElMessage.success(`识别出 ${merged.length} 份函证，请核对归集项目后确认`)
   } catch (e) {
     ElMessage.error('解析失败：' + (e as Error).message)
   } finally {
@@ -609,8 +621,9 @@ function rowClass({ row }: { row: ConfirmationItem }): string {
         <input type="file" accept=".pdf" @change="onIntakeFile" />
         <span v-if="intakeFileName" style="color: #6b7280; font-size: 13px">{{ intakeFileName }}</span>
         <el-button type="primary" size="small" :loading="intakeParsing" :disabled="!intakeFile" @click="handleIntakeParse">
-          {{ intakeParsing ? 'AI 识别中…' : '开始识别' }}
+          {{ intakeParsing ? 'AI 识别中…' : (intakeGroups.length ? '重新识别' : '开始识别') }}
         </el-button>
+        <span v-if="intakeGroups.length" style="color: #9ca3af; font-size: 12px">识别不佳可直接重试，已指定的项目会保留</span>
       </div>
 
       <el-table v-if="intakeGroups.length" :data="intakeGroups" border size="small">

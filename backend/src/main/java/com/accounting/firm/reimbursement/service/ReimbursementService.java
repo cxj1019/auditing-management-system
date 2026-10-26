@@ -44,6 +44,9 @@ public interface ReimbursementService extends IService<Reimbursement> {
     /** 提交草稿（本人；至少一条明细） */
     void submitDraft(Long id, SecurityUser currentUser);
 
+    /** 复制报销单为本人新草稿（附件不随复制） */
+    Long copyDraft(Long id, SecurityUser currentUser);
+
     /** 撤回待审批单据（本人，回到草稿） */
     void withdraw(Long id, SecurityUser currentUser);
 

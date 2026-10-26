@@ -103,3 +103,8 @@ export async function downloadReimbAttachment(id: number, attachmentId: number, 
 export function getReimbAttPreviewUrl(id: number, attachmentId: number): Promise<string> {
   return request.get(`/reimbursements/${id}/attachments/${attachmentId}/preview-url`)
 }
+
+/** 复制报销单为本人新草稿，返回新草稿 ID */
+export function copyReimbursement(id: number): Promise<number> {
+  return request.post(`/reimbursements/${id}/copy`)
+}

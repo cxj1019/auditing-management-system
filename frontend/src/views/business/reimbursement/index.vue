@@ -25,6 +25,7 @@ import {
   deleteReimbAttachment,
   getReimbItems,
   getReimbAttPreviewUrl,
+  copyReimbursement,
 } from '@/api/reimbursement'
 import AttachmentLink from '@/components/AttachmentLink.vue'
 import CaptureUpload from '@/components/CaptureUpload.vue'
@@ -403,6 +404,22 @@ async function handleDelete(row: ReimbursementItem): Promise<void> {
   } catch { /* 取消 */ }
 }
 
+/** 复制报销单为本人新草稿（明细/税率原样，附件与审批记录不复制） */
+const copying = ref(false)
+async function handleCopy(row: ReimbursementItem): Promise<void> {
+  copying.value = true
+  try {
+    const newId = await copyReimbursement(row.id)
+    ElMessage.success(`已复制为草稿，可编辑后提交`)
+    fetchList()
+    // 打开新草稿编辑
+    const fresh = (await pageReimbursements({ current: 1, size: 50, keyword: '' })).records.find((r) => r.id === newId)
+    if (fresh) openEdit(fresh)
+  } finally {
+    copying.value = false
+  }
+}
+
 // ---------- 审批 ----------
 const approveDialogVisible = ref(false)
 const approvingId = ref<number | null>(null)
@@ -739,6 +756,7 @@ onMounted(() => {
         <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
             <el-button link type="info" size="small" @click="openDetail(row)">详情</el-button>
+            <el-button v-permission="'business:reimbursement:add'" link type="primary" size="small" @click="handleCopy(row)">复制</el-button>
             <template v-if="row.status === 0 && isOwner(row)">
               <el-button v-permission="'business:reimbursement:edit'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
               <el-button v-permission="'business:reimbursement:edit'" link type="success" size="small" @click="handleSubmit(row)">提交</el-button>
