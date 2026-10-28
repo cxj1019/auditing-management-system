@@ -30,4 +30,10 @@ public class BackupController {
     public ApiResult<List<BackupHistory>> history() {
         return ApiResult.success(backupService.history());
     }
+
+    /** 立即生成新备份并把 ZIP 发送到 backup_mail_to（异地容灾兜底） */
+    @PostMapping("/mail-latest")
+    public ApiResult<String> mailLatest(@AuthenticationPrincipal SecurityUser currentUser) throws Exception {
+        return ApiResult.success(backupService.mailLatest(currentUser.getUsername()));
+    }
 }

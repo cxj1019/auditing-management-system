@@ -77,6 +77,8 @@ public class BackupService {
     private final com.accounting.firm.common.backup.mapper.BackupHistoryMapper backupHistoryMapper;
     private final SupabaseStorageService storageService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final com.accounting.firm.common.mail.MailService mailService;
+    private final com.accounting.firm.common.ai.AppSettingService appSettingService;
 
     /** 每日北京时间 02:30（UTC 18:30）自动备份 */
     @Scheduled(cron = "0 30 18 * * ?")
@@ -202,5 +204,37 @@ public class BackupService {
         return backupHistoryMapper.selectList(new LambdaQueryWrapper<com.accounting.firm.common.backup.BackupHistory>()
                 .orderByDesc(com.accounting.firm.common.backup.BackupHistory::getCreateTime)
                 .last("LIMIT 60"));
+    }
+
+    /** 每周把最新完整备份作为附件发到 backup_mail_to（异地容灾兜底），周日 20:00 北京时间 */
+    @Scheduled(cron = "0 0 12 * * SUN")
+    public void weeklyBackupMail() {
+        try {
+            String to = appSettingService.get("backup_mail_to");
+            if (to == null || to.isBlank()) {
+                log.info("未配置 backup_mail_to，跳过每周备份邮件");
+                return;
+            }
+            log.info("每周备份邮件: {}", mailLatest("system"));
+        } catch (Exception e) {
+            log.error("每周备份邮件失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /** 生成新备份并把 ZIP 作为附件发到 backup_mail_to，返回摘要 */
+    public String mailLatest(String operator) throws Exception {
+        String to = appSettingService.get("backup_mail_to");
+        if (to == null || to.isBlank()) {
+            throw new BusinessException("请先在系统设置中配置备份接收邮箱");
+        }
+        Map<String, Object> result = runBackup(operator);
+        String objectPath = String.valueOf(result.get("objectPath"));
+        byte[] zipBytes = storageService.download(objectPath);
+        String fileName = objectPath.substring(objectPath.lastIndexOf('/') + 1);
+        mailService.sendWithAttachment(to.trim(), "【审计管理系统】每周数据备份 " + fileName,
+                "附件为最新完整备份（表数据 JSON + 全部附件文件）。\n备份时间："
+                        + LocalDateTime.now() + "\n大小：" + (zipBytes.length / 1024) + " KB",
+                fileName, zipBytes);
+        return "已发送 " + fileName + "（" + (zipBytes.length / 1024) + " KB）至 " + to.trim();
     }
 }

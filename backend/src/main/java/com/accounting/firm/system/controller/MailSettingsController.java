@@ -43,6 +43,9 @@ public class MailSettingsController {
         String ssl = appSettingService.get(MailService.KEY_SSL);
         data.put("sslEnabled", ssl == null || ssl.isBlank() || "true".equalsIgnoreCase(ssl.trim()));
         data.put("ready", mailService.ready());
+        // 异地容灾与月报接收邮箱
+        data.put("backupMailTo", appSettingService.get("backup_mail_to"));
+        data.put("reportMailTo", appSettingService.get("report_mail_to"));
         return ApiResult.success(data);
     }
 
@@ -71,6 +74,9 @@ public class MailSettingsController {
         if (ssl != null && !ssl.isBlank()) {
             appSettingService.save(MailService.KEY_SSL, ssl, currentUser.getUsername());
         }
+        // 异地容灾与月报接收邮箱（空串=清除）
+        appSettingService.save("backup_mail_to", trim(body.get("backupMailTo")), currentUser.getUsername());
+        appSettingService.save("report_mail_to", trim(body.get("reportMailTo")), currentUser.getUsername());
         return ApiResult.success();
     }
 
